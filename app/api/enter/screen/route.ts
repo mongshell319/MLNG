@@ -31,10 +31,17 @@ export async function POST() {
 export async function GET(req: Request) {
   const token = new URL(req.url).searchParams.get('t') ?? undefined
   const identity = verifyScreenToken(token)
-  if (!identity) {
-    return NextResponse.redirect(new URL('/screen?expired=1', req.url))
-  }
-  const res = NextResponse.redirect(new URL('/screen', req.url))
-  res.cookies.set(cookieNameFor('screen'), sign(identity), cookieOptions())
+
+  // 상대 경로로 보낸다.
+  //
+  // NextResponse.redirect 는 절대 URL을 요구하는데, 그 절대 URL은 req.url 에서 나온다.
+  // 프록시 뒤(Codespaces·터널·리버스 프록시)에서는 req.url 이 내부 주소(localhost:3000)라서
+  // TV가 자기 자신의 localhost 로 튕겨 나가고 교실 화면이 열리지 않는다.
+  // 상대 Location 은 브라우저가 "자기가 요청한 주소" 기준으로 풀기 때문에 어디서든 맞다.
+  const res = new NextResponse(null, {
+    status: 307,
+    headers: { location: identity ? '/screen' : '/screen?expired=1' },
+  })
+  if (identity) res.cookies.set(cookieNameFor('screen'), sign(identity), cookieOptions())
   return res
 }

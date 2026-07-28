@@ -87,11 +87,30 @@ export default function DevConsole() {
     return json
   }
 
-  const openScreen = async () => {
-    const res = await fetch('/api/enter/screen', { method: 'POST' })
-    const json = (await res.json()) as { token?: string; error?: string }
-    if (!json.token) return say(json.error ?? '토큰을 못 만들었어요')
-    openWindow(`/api/enter/screen?t=${json.token}`)
+  /**
+   * 교실 TV 열기.
+   *
+   * 창을 먼저 연 다음 주소를 넣는다 — await 뒤의 window.open 은 사용자 제스처가 끊긴 것으로
+   * 취급돼 팝업 차단에 걸린다. 빈 창을 미리 잡아 두면 그 문제가 없다.
+   */
+  const openScreen = () => {
+    const win = window.open('', '_blank')
+    void fetch('/api/enter/screen', { method: 'POST' })
+      .then((r) => r.json())
+      .then((json: { token?: string; error?: string }) => {
+        if (!json.token) {
+          win?.close()
+          say(json.error ?? '토큰을 못 만들었어요')
+          return
+        }
+        const url = `/api/enter/screen?t=${json.token}`
+        if (win) win.location.href = url
+        else window.location.href = url // 팝업이 막혔으면 이 창에서 연다
+      })
+      .catch(() => {
+        win?.close()
+        say('교실 TV를 열지 못했어요')
+      })
   }
 
   return (
@@ -138,24 +157,28 @@ export default function DevConsole() {
           <PillButton
             tint="#FFC9B5"
             fg="#C96B4A"
-            onClick={() =>
-              run('asStudent', async () => {
+            onClick={() => {
+              const win = window.open('', '_blank')
+              void run('asStudent', async () => {
                 await enterAsStudent()
-                openWindow('/student')
+                if (win) win.location.href = '/student'
+                else openWindow('/student')
               })
-            }
+            }}
           >
             {busy === 'asStudent' ? '들어가는 중…' : '아무 말랑이로 입장 + 열기'}
           </PillButton>
           <PillButton
             tint="#FFF6EC"
             line="#E8D9C8"
-            onClick={() =>
-              run('asStudentPhone', async () => {
+            onClick={() => {
+              const win = window.open('', 'mallang-phone', 'width=390,height=844')
+              void run('asStudentPhone', async () => {
                 await enterAsStudent()
-                openPhone('/student')
+                if (win) win.location.href = '/student'
+                else openPhone('/student')
               })
-            }
+            }}
           >
             폰 크기(390×844)로 열기
           </PillButton>
@@ -164,10 +187,14 @@ export default function DevConsole() {
           {world.mallangs.slice(0, 8).map((m) => (
             <button
               key={m.id}
-              onClick={() => void run('as' + m.id, async () => {
-                await enterAsStudent(m.code)
-                openWindow('/student')
-              })}
+              onClick={() => {
+                const win = window.open('', '_blank')
+                void run('as' + m.id, async () => {
+                  await enterAsStudent(m.code)
+                  if (win) win.location.href = '/student'
+                  else openWindow('/student')
+                })
+              }}
               className="squishy rounded-full px-3 py-1.5 text-[12px] font-bold"
               style={{ background: m.bodyColor, border: '1.5px solid #E8D9C8' }}
             >

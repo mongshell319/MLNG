@@ -71,6 +71,10 @@ export function ScreenLink() {
             <p className="mt-2 text-[14px]" style={{ color: '#8C7A72' }}>
               TV 브라우저로 이 QR을 찍거나 주소를 열면 됩니다. {ttl}분 뒤에는 다시 만들어야 해요.
             </p>
+            <p className="mt-2 text-[13px]" style={{ color: '#B8A99E' }}>
+              Codespaces·터널로 띄웠다면 3000 포트를 <b>공개(Public)</b>로 바꿔야 다른 기기에서 열립니다.
+              같은 브라우저에서는 그대로도 됩니다.
+            </p>
 
             {problem && (
               <div className="mt-3 text-[14px]" style={{ color: '#8C7A72' }}>
@@ -95,7 +99,15 @@ export function ScreenLink() {
                 >
                   주소 복사
                 </PillButton>
-                <PillButton size="sm" tint="#D9D2F5" fg="#7A6BB5" onClick={() => window.open(url, '_blank')}>
+                <PillButton
+                  size="sm"
+                  tint="#D9D2F5"
+                  fg="#7A6BB5"
+                  onClick={() => {
+                    // 클릭 그 자리에서 연다. 팝업이 막히면 이 창에서 이어 간다.
+                    if (!window.open(url, '_blank')) window.location.href = url
+                  }}
+                >
                   이 기기에서 열기
                 </PillButton>
               </div>
