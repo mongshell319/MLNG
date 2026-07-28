@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.base.schema.json",
+  "name": "말랑스쿨",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+
+  // 브라우저에서 바로 열어 보기 위한 설정.
+  // Codespace 가 뜨면 3000 포트가 자동으로 공개 주소를 얻고 미리보기가 열린다.
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "말랑스쿨",
+      "onAutoForward": "openPreview",
+      // 학생 태블릿·교실 TV를 다른 기기에서 열어 보려면 공개여야 한다.
+      // 세 화면이 함께 움직이는 걸 보는 것이 이 서비스의 요점이다.
+      "visibility": "public"
+    }
+  },
+
+  "postCreateCommand": "npm install",
+  "postAttachCommand": {
+    "server": "npm run dev"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "bradlc.vscode-tailwindcss"]
+    }
+  }
+}

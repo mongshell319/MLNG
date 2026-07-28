@@ -18,16 +18,23 @@ const NAMES = [
   '무지개떡', '이슬방울', '까치발', '동그라미',
 ]
 
+/**
+ * 시연용 말랑 코드.
+ *
+ * 반드시 서로 달라야 한다 — 코드가 곧 신원이라, 겹치면 뒤쪽 학생이 아예 입장하지 못한다.
+ * 그래서 첫 글자와 끝 글자가 i를 그대로 실어 나른다(24 × 8 = 192명까지 유일).
+ * 가운데 네 자리는 그저 코드처럼 보이기 위한 것이다.
+ */
 function demoCode(i: number): string {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
   const D = '23456789'
   return (
-    A[(i * 7) % A.length] +
+    A[i % A.length] +
     A[(i * 13 + 5) % A.length] +
     D[(i * 3) % D.length] +
     D[(i * 5 + 2) % D.length] +
     A[(i * 11 + 3) % A.length] +
-    D[(i * 17 + 1) % D.length]
+    D[Math.floor(i / A.length) % D.length]
   )
 }
 

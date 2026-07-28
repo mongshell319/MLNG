@@ -1,4 +1,4 @@
-import type { Mallang, QuestProgress, SpotlightCard, WorldSnapshot } from './types'
+import type { FieldKey, Mallang, QuestProgress, SpotlightCard, WorldSnapshot } from './types'
 import { FIELD_BY_KEY, FIELDS } from './master'
 
 /**
@@ -54,13 +54,86 @@ export function rankCandidates(
     .sort((a, b) => b.score - a.score)
 }
 
-/** 한 줄 근거. 우수의 언어를 쓰지 않는다 (§3-2). */
-function reasonFor(m: Mallang, lift: number, overdue: number): string {
-  const field = FIELD_BY_KEY[fieldOf(m)]
-  if (lift >= 1.5) return '평소보다 한 걸음 더 갔어요'
-  if (overdue >= 2) return '조용히 계속 해 오고 있었어요'
-  if (m.badges[field.key] >= 2) return `${field.label} 쪽으로 꾸준히 가고 있어요`
-  return '오늘 끝까지 간 사람이에요'
+/**
+ * 한 줄 근거.
+ *
+ * 카드 다섯 장이 같은 문장을 달고 있으면 그건 아무 말도 하지 않은 것이다.
+ * 그래서 (무엇이 눈에 띄었나) × (어느 분야인가)로 갈라서 각자의 말을 준다.
+ * 우수의 언어는 쓰지 않는다 (§3-2) — 잘했다가 아니라 무엇을 했나를 적는다.
+ */
+type Situation = 'lift' | 'first' | 'steadfast' | 'growing' | 'finished'
+
+const REASONS: Record<Situation, Record<FieldKey, string>> = {
+  // 평소 자기 몫보다 눈에 띄게 더 간 날
+  lift: {
+    inquiry: '오늘은 질문을 한 번 더 들고 갔어요',
+    making: '평소보다 한 번 더 고쳐 봤어요',
+    care: '오늘은 옆자리까지 챙겼어요',
+    challenge: '먼저 나서 본 날이에요',
+    steady: '평소보다 한 걸음 더 갔어요',
+  },
+  // 한 번도 무대에 오른 적 없는 사람
+  first: {
+    inquiry: '묻고 싶은 걸 계속 적어 두고 있었어요',
+    making: '만들던 걸 오늘 끝냈어요',
+    care: '조용히 옆을 도와 온 사람이에요',
+    challenge: '오늘 처음으로 앞에 나왔어요',
+    steady: '빠진 날 없이 여기까지 왔어요',
+  },
+  // 오래 무대에 못 올랐지만 계속해 온 사람
+  steadfast: {
+    inquiry: '한동안 혼자 파고들고 있었어요',
+    making: '손이 계속 움직이고 있었어요',
+    care: '티 안 나게 계속 거들어 왔어요',
+    challenge: '조용히 준비하고 있었어요',
+    steady: '한동안 조용히 계속 해 왔어요',
+  },
+  // 그 분야 뱃지를 모아 가는 중
+  growing: {
+    inquiry: '질문이 점점 깊어지고 있어요',
+    making: '만드는 게 점점 손에 붙었어요',
+    care: '같이 하는 게 편해졌어요',
+    challenge: '나서는 게 덜 무서워졌대요',
+    steady: '하던 걸 계속 이어 가고 있어요',
+  },
+  // 오늘 끝까지 간 사람
+  finished: {
+    inquiry: '끝까지 알아보고 왔어요',
+    making: '오늘 것을 마무리했어요',
+    care: '끝날 때까지 같이 있었어요',
+    challenge: '끝까지 밀고 갔어요',
+    steady: '오늘 것을 끝까지 했어요',
+  },
+}
+
+function situationOf(m: Mallang, lift: number, overdue: number): Situation {
+  if (lift >= 1.5) return 'lift'
+  if (m.lastSpotlightAt === null) return 'first'
+  if (overdue >= 2) return 'steadfast'
+  if (m.badges[fieldOf(m)] >= 2) return 'growing'
+  return 'finished'
+}
+
+/** 우선순위. 같은 문장이 겹치면 이 순서로 다음 것을 찾는다. */
+const SITUATION_ORDER: Situation[] = ['lift', 'first', 'steadfast', 'growing', 'finished']
+
+function reasonFor(m: Mallang, lift: number, overdue: number, taken?: Set<string>): string {
+  const primary = situationOf(m, lift, overdue)
+  const field = fieldOf(m)
+  const first = REASONS[primary][field]
+  if (!taken || !taken.has(first)) {
+    taken?.add(first)
+    return first
+  }
+  // 무대는 다섯 장이 나란히 놓인다. 같은 문장이 둘이면 아무 말도 안 한 것이 된다.
+  for (const s of SITUATION_ORDER) {
+    const alt = REASONS[s][field]
+    if (!taken.has(alt)) {
+      taken.add(alt)
+      return alt
+    }
+  }
+  return first
 }
 
 function fieldOf(m: Mallang) {
@@ -73,13 +146,14 @@ function fieldOf(m: Mallang) {
 export function pickSpotlight(snapshot: WorldSnapshot, now: number = Date.now()): SpotlightCard[] {
   const ranked = rankCandidates(snapshot.mallangs, snapshot.progress, now)
   if (ranked.length === 0) return []
-  return ranked.slice(0, Math.min(5, Math.max(3, Math.min(ranked.length, 5)))).map((c) => ({
+  const taken = new Set<string>()
+  return ranked.slice(0, 5).map((c) => ({
     mallangId: c.mallang.id,
     name: c.mallang.name,
     bodyColor: c.mallang.bodyColor,
     form: c.mallang.evolutionForm,
     field: fieldOf(c.mallang),
-    reason: c.reason,
+    reason: reasonFor(c.mallang, c.lift, c.overdue, taken),
   }))
 }
 

@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 import { COOKIE_NAME, checkPin, cookieOptions, sign } from '@/lib/server/auth'
 import { ensureDemoClass, getRegistry } from '@/lib/server/registry'
-import { LIMITS, clientKey, take } from '@/lib/server/ratelimit'
+import { LIMITS, available, clientKey, take } from '@/lib/server/ratelimit'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 /** 교사 입장. 클래스 코드 + PIN. */
 export async function POST(req: Request) {
-  if (!take(`entergm:${clientKey(req)}`, LIMITS.enter)) {
+  const ip = clientKey(req)
+  const failKey = `entergmfail:${ip}`
+  if (!take(`entergm:${ip}`, LIMITS.enter) || !available(failKey, LIMITS.enterFail)) {
     return NextResponse.json({ error: '조금 뒤에 다시 해 주세요' }, { status: 429 })
   }
 
@@ -23,6 +25,8 @@ export async function POST(req: Request) {
 
   // 코드가 없는 경우와 PIN이 틀린 경우를 구분해서 알려 주지 않는다.
   if (!ref || !checkPin(pin, ref.teacherPinHash)) {
+    // PIN 대입을 늦추는 건 이 버킷이다. 맞은 시도는 소비하지 않는다.
+    take(failKey, LIMITS.enterFail)
     return NextResponse.json({ error: '코드나 PIN이 맞지 않아요' }, { status: 401 })
   }
 

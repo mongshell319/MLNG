@@ -27,11 +27,26 @@ export const LIMITS = {
   action: { burst: 30, perSecond: 2 },
   /** 세션을 통째로 움직이는 것 — 오작동하면 교실이 흔들린다 */
   session: { burst: 8, perSecond: 0.5 },
-  /** 입장 시도 — 코드 대입을 늦춘다 */
-  enter: { burst: 8, perSecond: 0.1 },
+  /**
+   * 입장.
+   *
+   * 한 교실은 학교 NAT 뒤에서 IP 하나로 보인다. 스물여덟 명이 수업 시작 종과 함께
+   * 동시에 들어오는 것이 정상이므로, 성공한 입장까지 조이면 서비스가 문 앞에서 막힌다.
+   * 그래서 넉넉히 두고, 대신 아래 enterFail 이 "틀린 코드"만 따로 센다.
+   */
+  enter: { burst: 80, perSecond: 2 },
+  /** 틀린 입장 시도만 소비한다. 코드 대입을 늦추는 건 이쪽 몫이다. */
+  enterFail: { burst: 10, perSecond: 0.05 },
   /** 사진 업로드 */
   upload: { burst: 12, perSecond: 0.3 },
 } satisfies Record<string, Limit>
+
+/** 토큰을 쓰지 않고 남았는지만 본다. 실패했을 때만 소비하는 버킷에 쓴다. */
+export function available(key: string, limit: Limit, now = Date.now()): boolean {
+  const b = buckets.get(key)
+  if (!b) return true
+  return Math.min(limit.burst, b.tokens + ((now - b.updatedAt) / 1000) * limit.perSecond) >= 1
+}
 
 export function take(key: string, limit: Limit, now = Date.now()): boolean {
   const b = buckets.get(key)

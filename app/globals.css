@@ -48,6 +48,9 @@
 @layer base {
   html,
   body {
+    /* 한글은 어절 단위로 끊어야 읽힌다. 이게 없으면 '여기까지'가 '여/기까지'로 갈라진다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
     margin: 0;
     background: var(--color-cream);
     color: var(--color-ink);

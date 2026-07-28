@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { COOKIE_NAME, cookieOptions, newMallangCode, sign } from '@/lib/server/auth'
 import { getRegistry, ensureDemoClass } from '@/lib/server/registry'
 import { getStore } from '@/lib/server/store'
-import { LIMITS, clientKey, take } from '@/lib/server/ratelimit'
+import { LIMITS, available, clientKey, take } from '@/lib/server/ratelimit'
 import { BODY_TINTS } from '@/lib/domain/master'
 
 export const dynamic = 'force-dynamic'
@@ -33,9 +33,16 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!take(`enter:${clientKey(req)}`, LIMITS.enter)) {
+  const ip = clientKey(req)
+  // 정상 입장은 넉넉히, 틀린 코드는 좁게. 한 교실이 IP 하나로 들어오기 때문이다.
+  if (!take(`enter:${ip}`, LIMITS.enter)) {
     return NextResponse.json({ error: '조금 뒤에 다시 해 주세요' }, { status: 429 })
   }
+  const failKey = `enterfail:${ip}`
+  if (!available(failKey, LIMITS.enterFail)) {
+    return NextResponse.json({ error: '조금 뒤에 다시 해 주세요' }, { status: 429 })
+  }
+  const miss = () => void take(failKey, LIMITS.enterFail)
 
   const body = (await req.json().catch(() => null)) as {
     classCode?: string
@@ -50,7 +57,10 @@ export async function POST(req: Request) {
 
   await ensureDemoClass()
   const ref = await getRegistry().byCode(classCode)
-  if (!ref) return NextResponse.json({ error: '그 코드의 마을을 찾지 못했어요' }, { status: 404 })
+  if (!ref) {
+    miss()
+    return NextResponse.json({ error: '그 코드의 마을을 찾지 못했어요' }, { status: 404 })
+  }
 
   const store = getStore()
   const world = await store.read(ref.villageId)
@@ -60,7 +70,10 @@ export async function POST(req: Request) {
   if (body.mallangCode) {
     const code = body.mallangCode.toUpperCase().trim()
     const found = world.mallangs.find((m) => m.code === code)
-    if (!found) return NextResponse.json({ error: '그 코드의 말랑이를 아직 못 찾았어요' }, { status: 404 })
+    if (!found) {
+      miss()
+      return NextResponse.json({ error: '그 코드의 말랑이를 아직 못 찾았어요' }, { status: 404 })
+    }
 
     const res = NextResponse.json({ ok: true, code: found.code, name: found.name })
     res.cookies.set(
