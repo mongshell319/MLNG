@@ -147,13 +147,15 @@ lib/
   server/      store(Supabase | 로컬) · auth · registry · realtimeToken · ratelimit
   client/      world(구독 + dispatch) · photo
 
-Dockerfile · render.yaml   컨테이너 하나로 띄우는 경로
-supabase/migrations/
-  0001_world.sql
-  0002_classes_and_private_photos.sql
+Dockerfile · render.yaml   컨테이너 하나로 띄우는 경로 (A)
+vercel.json                Vercel 배포 (B)
+supabase/
+  schema.sql               붙여넣기용 전체 스키마
+  migrations/0001 · 0002
 scripts/
-  check-rules.mjs   절대 규칙 (정적)
-  check-auth.mjs    권한 경계 (실제 서버를 두드림)
+  check-rules.mjs     절대 규칙 (정적)
+  check-auth.mjs      권한 경계 (실제 서버를 두드림)
+  check-supabase.mjs  Supabase 경로 (RLS · Realtime · 비공개 사진)
 ```
 
 ### 5분야 마스터 분류표가 단일 축이다
@@ -212,13 +214,41 @@ docker run -p 3000:3000 \
 
 여러 학교로 커지거나 서버를 직접 두고 싶지 않을 때. 서버리스라 인스턴스가 여럿이므로 A는 쓸 수 없다.
 
+**1. Supabase 프로젝트를 만들고 스키마를 넣는다**
+
+대시보드 → SQL Editor 에 `supabase/schema.sql` 을 통째로 붙여넣고 실행한다.
+(마이그레이션을 따로 관리한다면 `supabase/migrations/` 의 두 파일을 순서대로.)
+
+**2. Vercel 에 저장소를 연결하고 환경변수 다섯 개를 넣는다**
+
+| 변수 | 어디서 |
+|---|---|
+| `SESSION_SECRET` | `openssl rand -base64 48` — 쿠키 위조를 막는 유일한 값 |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 같은 곳 |
+| `SUPABASE_SERVICE_ROLE_KEY` | 같은 곳 · 서버 전용, 클라이언트에 넣지 말 것 |
+| `SUPABASE_JWT_SECRET` | 같은 곳의 **JWT Secret** |
+
+> `SUPABASE_JWT_SECRET`은 대칭키(HS256) 서명용이다. 프로젝트가 새 방식(비대칭 서명 키)만
+> 쓰도록 설정돼 있으면 legacy JWT secret 을 켜거나, `lib/server/realtimeToken.ts` 를
+> 그 방식에 맞게 바꿔야 한다. 이 값이 없으면 실시간 구독이 붙지 않는다.
+
+**3. 배포하고 검증한다**
+
 ```bash
-psql "$DATABASE_URL" -f supabase/migrations/0001_world.sql
-psql "$DATABASE_URL" -f supabase/migrations/0002_classes_and_private_photos.sql
+npm run check:supabase        # MLNG_BASE=https://your-app.vercel.app 로도 됨
 ```
 
-Vercel 환경변수 다섯 개: `SESSION_SECRET`(32자 이상), `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`.
+이 스크립트가 앱을 통해 끝까지 눌러 본다 — 마을 둘을 만들고, 한쪽 토큰으로 다른 쪽 세계가
+읽히는지, Realtime 변경이 1초 안에 닿는지, 서명 없는 공개 URL로 제출 사진이 열리는지,
+옆 마을 GM이 그 사진을 볼 수 있는지. 마지막에 검증용 마을을 지우는 SQL을 알려 준다.
+
+**4. 첫 마을을 만든다**
+
+`/teacher` → **새 마을 세우기**. 클래스 코드가 나오고, 학생은 그 코드나 QR로 들어온다.
+시연용 교실(`MLNG24`)은 프로덕션에서 만들어지지 않는다.
+
+#### 데이터 구조
 
 `worlds` 테이블의 jsonb 한 행이 마을 하나다. 쓰기는 낙관적 잠금(`version`)으로 직렬화되므로
 스물여덟 명이 동시에 전달해도 덮어쓰기가 없고, 충돌하면 최신 상태 위에서 다시 적용한다.
@@ -229,9 +259,11 @@ Vercel 환경변수 다섯 개: `SESSION_SECRET`(32자 이상), `NEXT_PUBLIC_SUP
 스냅샷은 수십 KB다. 학년 단위 통계가 필요해지면 `world_events`에서 읽기 전용 정규화 테이블을
 파생시키면 된다.
 
-**실시간 구독의 범위** — 브라우저가 `worlds` 행을 구독하려면 Supabase 쪽에서도 신원이 있어야 한다.
-anon 키로 열어 두면 RLS가 걸 것이 없어서 **다른 학교의 세계까지 전부 구독된다**. 그래서 우리 서버가
-쿠키를 확인한 뒤 `village_id` 클레임 하나만 담은 JWT를 발급하고, 정책은 그것만 본다.
+#### 실시간 구독의 범위
+
+브라우저가 `worlds` 행을 구독하려면 Supabase 쪽에서도 신원이 있어야 한다. anon 키로 열어 두면
+RLS가 걸 것이 없어서 **다른 학교의 세계까지 전부 구독된다**. 그래서 우리 서버가 쿠키를 확인한 뒤
+`village_id` 클레임 하나만 담은 JWT를 발급하고, 정책은 그것만 본다.
 
 ```sql
 using (village_id = (auth.jwt() ->> 'village_id'))
@@ -285,5 +317,6 @@ npm run build        # 프로덕션 빌드
 npm run typecheck    # tsc --noEmit
 npm run check:rules  # 절대 규칙 체커 (정적)
 npm run check        # typecheck + check:rules
-npm run check:auth   # 권한 체커 (개발 서버를 띄운 상태에서)
+npm run check:auth      # 권한 체커 (개발 서버를 띄운 상태에서)
+npm run check:supabase  # Supabase 경로 검증 (RLS · Realtime · 비공개 사진)
 ```

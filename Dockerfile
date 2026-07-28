@@ -21,6 +21,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # 빌드 시점에는 세계에 손대지 않는다. 페이지는 전부 클라이언트에서 상태를 받아 온다.
+ENV MLNG_STANDALONE=1
 RUN npm run build
 
 FROM node:22-alpine AS runner
