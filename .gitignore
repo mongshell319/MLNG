@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+build/
+
+# 로컬 어댑터가 세계 상태를 얹어 두는 곳
+.data/
+
+.env
+.env.local
+.env*.local
+
+*.log
+.DS_Store
+next-env.d.ts
+*.tsbuildinfo

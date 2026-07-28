@@ -1,0 +1,83 @@
+/* P1–P3 인쇄물. 브라우저 인쇄로 PDF를 뽑는다. 300dpi 기준. */
+
+.print-root {
+  --ink: #6e5a54;
+  background: #efeae2;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.sheet {
+  background: #fff6ec;
+  border: 1.5px solid #e8d9c8;
+  border-radius: 20px;
+  padding: 14mm;
+  box-sizing: border-box;
+}
+
+/* A3 세로 */
+.sheet-a3 {
+  width: 297mm;
+  min-height: 420mm;
+}
+
+/* 명함 90×54mm — 코팅해서 나눠 준다 */
+.card-90x54 {
+  width: 90mm;
+  height: 54mm;
+  border: 1.2mm solid var(--ink);
+  border-radius: 6mm;
+  background: #fff6ec;
+  padding: 5mm;
+  box-sizing: border-box;
+  display: flex;
+  gap: 4mm;
+  align-items: center;
+  page-break-inside: avoid;
+}
+
+/* 엽서 148×100mm */
+.card-postcard {
+  width: 148mm;
+  height: 100mm;
+  border: 1mm solid var(--ink);
+  border-radius: 5mm;
+  background: #fff6ec;
+  padding: 6mm;
+  box-sizing: border-box;
+  page-break-inside: avoid;
+}
+
+.hint {
+  font-size: 12px;
+  color: #b8a99e;
+}
+
+@media print {
+  @page {
+    size: A3 portrait;
+    margin: 10mm;
+  }
+  .print-root {
+    background: #fff;
+    padding: 0;
+    gap: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .sheet {
+    /* 종이 위에서는 시트 테두리 자체가 사라지므로 라운드를 논할 대상이 없다.
+       증표·엽서의 라운드는 그대로 살아 있다. */
+    border: none;
+    padding: 0;
+    page-break-after: always;
+    min-height: auto;
+  }
+  .sheet:last-child {
+    page-break-after: auto;
+  }
+}

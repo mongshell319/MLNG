@@ -1,0 +1,281 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────
+   말랑스쿨 디자인 토큰 (handoff §Design Tokens)
+   파스텔은 면에, deep 계열은 텍스트·외곽선·강조에.
+   색과 의미는 고정 결합이며 교차 사용 금지.
+   ───────────────────────────────────────────────────────── */
+@theme {
+  --color-cream: #fff6ec; /* bg-cream · 전 화면 기본 배경 */
+  --color-pink: #ffd6e5; /* mallang-pink · 말랑이 기본 몸색 */
+  --color-peach: #ffc9b5; /* quest-main */
+  --color-mint: #c5ebdd; /* quest-side */
+  --color-lavender: #d9d2f5; /* quest-guild */
+  --color-lemon: #fff0b3; /* quest-flash · 새 획득 알림 점 */
+  --color-ink: #6e5a54; /* ink-cocoa · 모든 텍스트와 라인 */
+  --color-deep-peach: #c96b4a;
+  --color-deep-mint: #4a8b6f;
+  --color-deep-lavender: #7a6bb5;
+  --color-deep-lemon: #b8933a;
+  --color-blush: #ffb3c6;
+  --color-fog: #d8d2cc;
+
+  /* 파생 값 (handoff "확정 필요" 2·3번 — 토큰으로 승격 대기) */
+  --color-beak: #ffd34d;
+  --color-muted: #b8a99e;
+  --color-locked: #efeae2;
+  --color-hairline: #e8d9c8;
+  --color-wood: #f3e3cc;
+  --color-wood-deep: #ead9c2;
+  --color-water: #bfe3ef;
+  --color-water-light: #d9f0f7;
+  --color-night: #3a3350;
+  --color-night-light: #5a4b62;
+  --color-ground: #cfe0d4;
+  --color-ground-deep: #a9c4b2;
+  --color-leaf: #8fbf9e;
+
+  --radius-card: 20px;
+  --radius-modal: 24px;
+  --radius-pill: 999px;
+
+  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'Jua', 'Pretendard', sans-serif;
+
+  --ease-mallang: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 직각 모서리 금지 · 그림자 금지 (§3 추가 제약) */
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    color: var(--color-ink);
+    border-radius: var(--radius-pill);
+  }
+  button {
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  a {
+    color: var(--color-deep-lavender);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--color-deep-peach);
+  }
+  ::selection {
+    background: var(--color-lemon);
+  }
+}
+
+/* ─── 모션: 물성은 단 하나, 말랑 (handoff §모션) ─── */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes squish {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(0.95, 0.92);
+  }
+  70% {
+    transform: scale(1.03, 1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes popin {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes riseup {
+  0% {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-200px);
+    opacity: 0;
+  }
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+@keyframes growup {
+  0% {
+    transform: translateY(24px) scaleY(0.6);
+    opacity: 0.4;
+  }
+  60% {
+    transform: translateY(-5px) scaleY(1.04);
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+    opacity: 1;
+  }
+}
+@keyframes stampin {
+  0% {
+    transform: scale(2.2) rotate(-18deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.95) rotate(-8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-8deg);
+  }
+}
+@keyframes gatelight {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes fogmove {
+  0% {
+    transform: translateX(-4%);
+  }
+  50% {
+    transform: translateX(4%);
+  }
+  100% {
+    transform: translateX(-4%);
+  }
+}
+@keyframes flyres {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(120px, -140px) scale(0.3);
+    opacity: 0;
+  }
+}
+@keyframes ripple {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(1.06);
+    opacity: 0.8;
+  }
+}
+@keyframes bounceload {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  45% {
+    transform: translateY(-14px) scaleY(1.06);
+  }
+  60% {
+    transform: translateY(0) scaleY(0.9);
+  }
+}
+
+.anim-floaty {
+  animation: floaty 4s ease-in-out infinite;
+}
+.anim-popin {
+  animation: popin 0.42s var(--ease-mallang) both;
+}
+.anim-twinkle {
+  animation: twinkle 2.4s ease-in-out infinite;
+}
+.anim-growup {
+  animation: growup 1.2s var(--ease-mallang) both;
+}
+.anim-stampin {
+  animation: stampin 0.5s var(--ease-mallang) both;
+}
+.anim-gatelight {
+  animation: gatelight 1.4s ease-out both;
+}
+.anim-fogmove {
+  animation: fogmove 8s ease-in-out infinite;
+}
+.anim-riseup {
+  animation: riseup 2.5s ease-out forwards;
+}
+.anim-flyres {
+  animation: flyres 1.6s ease-in forwards;
+}
+.anim-ripple {
+  animation: ripple 5s ease-in-out infinite;
+}
+.anim-bounceload {
+  animation: bounceload 1.1s var(--ease-mallang) infinite;
+}
+
+/* 탭 피드백 · 180ms ease-out-back (handoff §모션) */
+.squishy {
+  transition: transform 180ms var(--ease-mallang);
+}
+.squishy:active {
+  animation: squish 180ms var(--ease-mallang);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* TV(C1)는 1920×1080 고정 무대를 뷰포트에 맞춰 스케일한다 */
+.stage-1080 {
+  width: 1920px;
+  height: 1080px;
+  transform-origin: top left;
+}
