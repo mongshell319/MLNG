@@ -19,7 +19,7 @@ import './print.css'
  * 브라우저 인쇄로 PDF를 뽑는다. 인쇄 시 화면용 안내는 전부 빠진다.
  */
 export default function PrintSheets() {
-  const { world } = useWorld()
+  const { world, needsEntry, identity } = useWorld()
   const [qrs, setQrs] = useState<Record<string, string>>({})
 
   const cardMallangs = world?.mallangs.slice(0, 8) ?? []
@@ -43,6 +43,26 @@ export default function PrintSheets() {
     }
     // 말랑이 목록이 바뀔 때만 다시 만든다
   }, [cardMallangs.map((m) => m.code).join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 증표에는 말랑 코드가 찍힌다. 교사만 뽑을 수 있어야 한다.
+  if (needsEntry || (identity && identity.kind !== 'gm')) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <Keeper field="steady" size={110} className="anim-floaty" />
+        <div className="font-display text-[22px]">인쇄물은 GM 화면에서 꺼내요</div>
+        <p className="text-[15px]" style={{ color: '#8C7A72' }}>
+          증표에 말랑 코드가 찍히기 때문에, 교사로 입장한 다음에 열 수 있어요.
+        </p>
+        <a
+          href="/teacher"
+          className="squishy rounded-full px-6 py-3 text-[15px] font-bold"
+          style={{ background: '#FFC9B5', color: '#C96B4A', border: '1.5px solid #C96B4A' }}
+        >
+          GM으로 들어가기
+        </a>
+      </div>
+    )
+  }
 
   if (!world) return <Loader label="인쇄물을 꺼내는 중이에요" />
 

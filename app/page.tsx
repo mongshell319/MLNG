@@ -9,28 +9,28 @@ import { Keeper } from '@/components/mallang/Keeper'
 
 const DOORS = [
   {
-    href: '/screen',
-    title: '클래스 스크린',
-    sub: '교실 TV · 1920×1080',
-    body: '스물여덟 명의 결과가 동시에 터지는 곳. 이 서비스가 파는 경험의 본체.',
-    tint: '#D9D2F5',
-    deep: '#7A6BB5',
+    href: '/teacher',
+    title: '교사 GM',
+    sub: '여기서 시작합니다',
+    body: '마을을 세우면 클래스 코드가 나옵니다. 학생 입장도, 교실 TV도 그 코드에서 갈라져요.',
+    tint: '#C5EBDD',
+    deep: '#4A8B6F',
   },
   {
     href: '/student',
     title: '학생',
     sub: '태블릿 가로 · 폰 세로',
-    body: '마을 광장에 도착해서, 의뢰를 받고, 원정지로 떠난다.',
+    body: '클래스 코드나 QR로 들어와 말랑이를 만들고, 의뢰를 받고, 원정지로 떠납니다.',
     tint: '#FFC9B5',
     deep: '#C96B4A',
   },
   {
-    href: '/teacher',
-    title: '교사 GM',
-    sub: '태블릿 / PC 가로',
-    body: '원정 발행, 검증, 리모컨, 시즌 관리. 주 20분 안에 끝난다.',
-    tint: '#C5EBDD',
-    deep: '#4A8B6F',
+    href: '/screen',
+    title: '클래스 스크린',
+    sub: '교실 TV · 1920×1080',
+    body: '교사 화면의 "클래스 스크린 열기"로 띄웁니다. 스물여덟 명의 결과가 동시에 터지는 곳.',
+    tint: '#D9D2F5',
+    deep: '#7A6BB5',
   },
 ]
 
@@ -73,7 +73,9 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <Keeper field="care" size={54} />
           <div className="text-[14px]">
-            인쇄물이 필요하면 <b>모험가 증표 · 교실 게이트 · 시즌 엽서</b>를 여기서 뽑아 가세요.
+            <b>모험가 증표 · 교실 게이트 · 시즌 엽서</b>는 GM으로 입장한 뒤 뽑을 수 있어요.
+            <br />
+            <span style={{ color: '#8C7A72' }}>증표에 말랑 코드가 찍히기 때문이에요.</span>
           </div>
         </div>
         <Link

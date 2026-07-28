@@ -1,10 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { Mallang } from '@/components/mallang/Mallang'
 import { FieldScene, SegmentBadge } from '@/components/screen/Field'
 import { ClassIcon, HeartIcon, LockIcon } from '@/components/ui/Icons'
 import { PillButton } from '@/components/ui/primitives'
 import { useWorld } from '@/lib/client/world'
+import { uploadPhoto } from '@/lib/client/photo'
 import { CLASS_ABILITY, EXPEDITION_BY_KEY, isSettling } from '@/lib/domain/master'
 import { crisisSeconds, derivePhase, formatClock, remainingSeconds } from '@/lib/domain/phase'
 import type { Mallang as MallangType, WorldSnapshot } from '@/lib/domain/types'
@@ -17,7 +19,8 @@ import type { Mallang as MallangType, WorldSnapshot } from '@/lib/domain/types'
  * 조작 시간이 1–2분을 넘지 않도록 요소를 최소화한다.
  */
 export function StudentField({ world, me, now }: { world: WorldSnapshot; me: MallangType; now: number }) {
-  const { dispatch } = useWorld()
+  const { dispatch, say } = useWorld()
+  const [uploading, setUploading] = useState(false)
   const { phase } = derivePhase(world.session, now)
   const cls = CLASS_ABILITY[me.classRole]
   const type = EXPEDITION_BY_KEY[world.session.expeditionType]
@@ -114,21 +117,26 @@ export function StudentField({ world, me, now }: { world: WorldSnapshot; me: Mal
                   })}
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    onClick={() =>
-                      dispatch({
-                        type: 'quest.photo',
-                        questId: todayQuest.id,
-                        mallangId: me.id,
-                        photoUrl: `https://dummyimage.com/480x360/FFC9B5/6E5A54.png&text=${encodeURIComponent(me.name)}`,
-                        at: at(),
-                      })
-                    }
-                    className="squishy rounded-full px-4 py-2 text-[13px] font-bold"
-                    style={{ background: p?.photoUrl ? '#FFC9B5' : '#FFFFFF', border: '1.5px solid #E8D9C8' }}
+                  <label
+                    className="squishy inline-block rounded-full px-4 py-2 text-[13px] font-bold"
+                    style={{ background: p?.photoUrl ? '#FFC9B5' : '#FFFFFF', border: '1.5px solid #E8D9C8', cursor: 'pointer' }}
                   >
-                    {p?.photoUrl ? '사진 다시' : '사진 찍기'}
-                  </button>
+                    {uploading ? '올리는 중…' : p?.photoUrl ? '사진 다시' : '사진 찍기'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        setUploading(true)
+                        const result = await uploadPhoto(file, todayQuest.id)
+                        setUploading(false)
+                        if (!result.ok) say(result.error ?? '사진을 올리지 못했어요')
+                      }}
+                    />
+                  </label>
                   <PillButton
                     tint="#C96B4A"
                     fg="#FFF6EC"

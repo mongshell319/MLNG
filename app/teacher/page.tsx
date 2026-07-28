@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useWorld } from '@/lib/client/world'
 import { Loader, Toast } from '@/components/ui/primitives'
+import { GmGate } from '@/components/teacher/GmGate'
+import { ScreenLink } from '@/components/teacher/ScreenLink'
 import { SessionRemote } from '@/components/teacher/SessionRemote'
 import { Publish } from '@/components/teacher/Publish'
 import { Verify } from '@/components/teacher/Verify'
@@ -17,22 +19,30 @@ import { Onboarding } from '@/components/teacher/Onboarding'
  */
 
 const TABS = [
-  { key: 'publish', label: '원정 발행', note: 'T2' },
-  { key: 'verify', label: '검증함', note: 'T3' },
-  { key: 'class', label: '현황 · 리모컨', note: 'T4' },
-  { key: 'season', label: '시즌 관리', note: 'T5' },
-  { key: 'onboarding', label: '온보딩', note: 'T1' },
+  { key: 'publish', label: '원정 발행' },
+  { key: 'verify', label: '검증함' },
+  { key: 'class', label: '현황 · 리모컨' },
+  { key: 'season', label: '시즌 관리' },
+  { key: 'onboarding', label: '온보딩' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
 
 export default function TeacherApp() {
-  const { world, note } = useWorld()
+  const { world, note, needsEntry, loading, identity, refresh } = useWorld()
   const [tab, setTab] = useState<TabKey>('publish')
 
-  if (!world) return <Loader label="교무실을 여는 중이에요" />
+  if (needsEntry) return <GmGate />
+  if (loading || !world) return <Loader label="교무실을 여는 중이에요" />
+  // 학생 쿠키로 교사 화면을 열 수는 없다. 서버도 막지만 화면에서도 되돌린다.
+  if (identity?.kind !== 'gm') return <GmGate />
 
   const pending = world.progress.filter((p) => p.status === 'delivering').length
+
+  const leave = async () => {
+    await fetch('/api/leave', { method: 'POST' })
+    await refresh()
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-5 py-5">
@@ -43,14 +53,16 @@ export default function TeacherApp() {
         <span className="text-[13px]" style={{ color: '#8C7A72' }}>
           {world.village.name} · {world.halls[0]?.name}
         </span>
-        <Link
-          href="/screen"
-          target="_blank"
-          className="squishy ml-auto rounded-full px-4 py-2 text-[13px] font-bold"
-          style={{ background: '#D9D2F5', color: '#7A6BB5', border: '1.5px solid #7A6BB5' }}
-        >
-          클래스 스크린 열기 ↗
-        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <ScreenLink />
+          <button
+            onClick={leave}
+            className="squishy rounded-full px-4 py-2 text-[13px] font-bold"
+            style={{ background: '#FFFFFF', border: '1.5px solid #E8D9C8', color: '#8C7A72' }}
+          >
+            나가기
+          </button>
+        </div>
       </header>
 
       <SessionRemote world={world} />

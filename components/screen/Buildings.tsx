@@ -1,3 +1,4 @@
+import { photoSrc } from '@/lib/client/photo'
 import type { BuildingKey } from '@/lib/domain/types'
 
 /**
@@ -270,7 +271,7 @@ export function WorkBoard({ works, width = 300 }: { works: (string | null)[]; wi
               aspectRatio: '4 / 3',
               border: `2px solid ${INK}`,
               background: w
-                ? `center/cover url(${w})`
+                ? `center/cover url(${photoSrc(w)})`
                 : `linear-gradient(140deg, ${['#FFD6E5', '#C5EBDD', '#D9D2F5', '#FFF0B3', '#FFC9B5', '#BFE3EF'][i % 6]}, #FFF6EC)`,
             }}
           />

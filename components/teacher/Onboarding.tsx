@@ -22,7 +22,8 @@ export function Onboarding({ world }: { world: WorldSnapshot }) {
   const [villageName, setVillageName] = useState(world.village.name)
   const [hallName, setHallName] = useState('기가 공작소')
   const [subject, setSubject] = useState('기술·가정')
-  const [classCode] = useState(() => Math.random().toString(36).slice(2, 8).toUpperCase())
+  // 코드는 마을을 세울 때 서버가 발급한 것이다. 화면에서 새로 만들지 않는다.
+  const classCode = world.village.classCode
   const [qr, setQr] = useState('')
 
   useEffect(() => {
@@ -82,8 +83,8 @@ export function Onboarding({ world }: { world: WorldSnapshot }) {
           <>
             <div className="font-display text-[19px]">어느 쪽으로 시작할까요?</div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Choice on={mode === 'new'} onClick={() => setMode('new')} title="새 마을 세우기" body="이 반이 처음이라면 이쪽. 마을과 원정지가 함께 만들어져요." />
-              <Choice on={mode === 'join'} onClick={() => setMode('join')} title="기존 마을에 상회 열기" body="다른 과목 선생님이 이미 세운 마을이 있다면 이쪽." />
+              <Choice on={mode === 'new'} onClick={() => setMode('new')} title="이 마을 이름 정하기" body="지금 들어와 있는 마을을 첫 수업에 맞게 정리해요." />
+              <Choice on={mode === 'join'} onClick={() => setMode('join')} title="상회 하나 더 열기" body="다른 과목 수업도 같은 마을에서 연다면 이쪽." />
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -107,6 +108,8 @@ export function Onboarding({ world }: { world: WorldSnapshot }) {
             <div className="font-display text-[19px]">클래스 코드</div>
             <p className="mt-2 text-[14px]" style={{ color: '#8C7A72' }}>
               학생은 이 코드나 QR로 들어와요. 실명도 이메일도 받지 않아요.
+              <br />
+              GM으로 다시 들어올 때는 이 코드와 마을을 세울 때 정한 PIN이 필요해요.
             </p>
             <div
               className="mt-4 inline-block rounded-[20px] px-10 py-6 font-display text-[42px] tracking-[0.2em]"
@@ -178,7 +181,7 @@ export function Onboarding({ world }: { world: WorldSnapshot }) {
                   setStep(4)
                 }}
               >
-                이대로 시작하기
+                {mode === 'new' ? '이대로 시작하기' : '상회 열기'}
               </PillButton>
             </div>
           </>

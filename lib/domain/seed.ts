@@ -2,8 +2,13 @@ import { BODY_TINTS, FIELDS, QUEST_TEMPLATES } from './master'
 import type { ClassRole, Mallang, Quest, WorldSnapshot } from './types'
 
 /**
- * 첫 세계. 교사가 T1 온보딩을 끝내기 전까지 마을은 "빈 터 + 캠프"다 (§6 첫 사용).
- * 터줏말랑 다섯은 처음부터 주민이라 상회가 하나뿐이어도 마을이 비어 보이지 않는다.
+ * 새 세계.
+ *
+ * 실제로 개설되는 마을은 비어 있다 — 학생이 아직 아무도 없고, 마을은 빈 터에 캠프만 있다.
+ * "여기에 우리 마을이 세워져요" (§6 첫 사용)가 그 상태의 화면이다.
+ *
+ * demo: true 는 개발·시연용이다. 28명과 지난 기록이 이미 들어 있어
+ * 정산·스포트라이트·물드는 밤을 혼자서도 돌려볼 수 있다.
  */
 
 const NAMES = [
@@ -13,7 +18,7 @@ const NAMES = [
   '무지개떡', '이슬방울', '까치발', '동그라미',
 ]
 
-function code(i: number): string {
+function demoCode(i: number): string {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
   const D = '23456789'
   return (
@@ -26,11 +31,11 @@ function code(i: number): string {
   )
 }
 
-function seedMallangs(villageId: string, hallId: string, at: string): Mallang[] {
+function demoMallangs(villageId: string, hallId: string, at: string): Mallang[] {
   const roles: ClassRole[] = FIELDS.map((f) => f.classRole)
   return NAMES.map((name, i) => ({
     id: `m-${i + 1}`,
-    code: code(i),
+    code: demoCode(i),
     name,
     bodyColor: BODY_TINTS[i % BODY_TINTS.length],
     xp: 120 + ((i * 37) % 400),
@@ -56,10 +61,11 @@ function seedMallangs(villageId: string, hallId: string, at: string): Mallang[] 
   }))
 }
 
-function seedQuests(hallId: string, at: string): Quest[] {
+/** T1 온보딩의 "추천 의뢰 5종"이 이 목록이다. 새 마을도 첫날 쓸 것을 갖고 시작한다. */
+function starterQuests(hallId: string, at: string, demo: boolean): Quest[] {
   const day = 24 * 60 * 60 * 1000
   const t = QUEST_TEMPLATES
-  return [
+  const base: Quest[] = [
     {
       id: 'q-main',
       hallId,
@@ -136,6 +142,12 @@ function seedQuests(hallId: string, at: string): Quest[] {
       carriedOver: false,
       createdAt: at,
     },
+  ]
+
+  if (!demo) return base
+
+  return [
+    ...base,
     {
       id: 'q-carry',
       hallId,
@@ -158,41 +170,60 @@ function seedQuests(hallId: string, at: string): Quest[] {
   ]
 }
 
-export function seedWorld(at: string = new Date().toISOString()): WorldSnapshot {
-  const villageId = 'v-1'
-  const hallId = 'hall-1'
+export interface SeedOptions {
+  villageId: string
+  villageName: string
+  classCode: string
+  hallId: string
+  hallName: string
+  subject?: string
+  at?: string
+  /** 개발·시연용 세계를 만든다. 학생 28명과 지난 기록이 들어 있다. */
+  demo?: boolean
+}
+
+export function seedWorld(opts: SeedOptions): WorldSnapshot {
+  const { villageId, villageName, classCode, hallId, hallName, subject = '공통', demo = false } = opts
+  const at = opts.at ?? new Date().toISOString()
+
   return {
     village: {
       id: villageId,
       estateId: 'e-1',
-      name: '작은 말랑 마을',
+      name: villageName,
+      classCode,
       season: 1,
-      buildings: { library: 2, workshop: 2, plaza: 3, lighthouse: 1, garden: 2 },
-      amenities: ['벤치', '가로등'],
-      monuments: ['첫 완공 기념비'],
-      guildProgress: 15,
+      // 새 마을은 빈 터에서 시작한다. 시연용만 이미 자라 있다.
+      buildings: demo
+        ? { library: 2, workshop: 2, plaza: 3, lighthouse: 1, garden: 2 }
+        : { library: 1, workshop: 1, plaza: 1, lighthouse: 1, garden: 1 },
+      amenities: demo ? ['벤치', '가로등'] : [],
+      monuments: demo ? ['첫 완공 기념비'] : [],
+      guildProgress: demo ? 15 : 0,
       guildGoal: 24,
-      mongle: 40,
+      mongle: demo ? 40 : 0,
       weather: '맑음',
       examMode: false,
-      founded: true,
+      founded: demo,
     },
-    halls: [
-      { id: hallId, villageId, name: '기가 공작소', subject: '기술·가정', teacherKey: 'gm' },
-      { id: 'hall-2', villageId, name: '국어 글방', subject: '국어', teacherKey: 'gm' },
-      { id: 'hall-3', villageId, name: '과학 연구소', subject: '과학', teacherKey: 'gm' },
-    ],
+    halls: [{ id: hallId, villageId, name: hallName, subject, teacherKey: 'gm' }],
     sites: [
       {
         id: 'site-forest',
         villageId,
         name: '숲 어귀',
         type: 'explore',
-        segments: [
-          { name: '오솔길', progress: 100, done: true },
-          { name: '고목 아래', progress: 35, done: false },
-          { name: '숲 안쪽', progress: 0, done: false },
-        ],
+        segments: demo
+          ? [
+              { name: '오솔길', progress: 100, done: true },
+              { name: '고목 아래', progress: 35, done: false },
+              { name: '숲 안쪽', progress: 0, done: false },
+            ]
+          : [
+              { name: '오솔길', progress: 0, done: false },
+              { name: '고목 아래', progress: 0, done: false },
+              { name: '숲 안쪽', progress: 0, done: false },
+            ],
         unlocked: true,
         cleared: false,
       },
@@ -231,14 +262,14 @@ export function seedWorld(at: string = new Date().toISOString()): WorldSnapshot 
       },
     ],
     session: {
-      id: 's-1',
+      id: `s-${villageId}`,
       hallId,
       villageId,
       phase: 'before',
       siteId: 'site-forest',
-      segmentIndex: 1,
+      segmentIndex: demo ? 1 : 0,
       expeditionType: 'explore',
-      prog: 8,
+      prog: 0,
       crisis: { active: false, kind: 'fog', label: '', counter: 0, goal: 0, endsAt: null, settled: 'none' },
       endsAt: null,
       openingStartedAt: null,
@@ -253,15 +284,17 @@ export function seedWorld(at: string = new Date().toISOString()): WorldSnapshot 
       toolOverlay: { kind: '', endsAt: null, raffleName: '' },
       updatedAt: at,
     },
-    mallangs: seedMallangs(villageId, hallId, at),
-    quests: seedQuests(hallId, at),
+    mallangs: demo ? demoMallangs(villageId, hallId, at) : [],
+    quests: starterQuests(hallId, at, demo),
     progress: [],
     praises: [],
-    discoveries: [
-      { id: 'd-1', mallangId: null, villageId, name: '접힌 지도 조각', kind: 'map', createdAt: at },
-      { id: 'd-2', mallangId: null, villageId, name: '이름 모를 씨앗', kind: 'seed', createdAt: at },
-      { id: 'd-3', mallangId: null, villageId, name: '고목의 탁본', kind: 'rubbing', createdAt: at },
-    ],
+    discoveries: demo
+      ? [
+          { id: 'd-1', mallangId: null, villageId, name: '접힌 지도 조각', kind: 'map', createdAt: at },
+          { id: 'd-2', mallangId: null, villageId, name: '이름 모를 씨앗', kind: 'seed', createdAt: at },
+          { id: 'd-3', mallangId: null, villageId, name: '고목의 탁본', kind: 'rubbing', createdAt: at },
+        ]
+      : [],
     letters: [],
     gmAwardsRemaining: 5,
     version: 1,

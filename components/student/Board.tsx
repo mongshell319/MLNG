@@ -6,6 +6,7 @@ import { Keeper } from '@/components/mallang/Keeper'
 import { EnvelopeIcon, KindIcon } from '@/components/ui/Icons'
 import { PillButton, Ribbon } from '@/components/ui/primitives'
 import { useWorld } from '@/lib/client/world'
+import { photoSrc, uploadPhoto } from '@/lib/client/photo'
 import { EXPEDITION_BY_KEY, FIELD_BY_KEY, QUEST_KIND } from '@/lib/domain/master'
 import type { Mallang as MallangType, Quest, QuestProgress, WorldSnapshot } from '@/lib/domain/types'
 
@@ -138,8 +139,9 @@ export function QuestCard({
   me: MallangType
   big?: boolean
 }) {
-  const { dispatch } = useWorld()
+  const { dispatch, say } = useWorld()
   const [open, setOpen] = useState(big)
+  const [busy, setBusy] = useState(false)
   const kind = QUEST_KIND[quest.kind]
   const field = FIELD_BY_KEY[quest.client]
   const p: QuestProgress | undefined = world.progress.find((x) => x.questId === quest.id && x.mallangId === me.id)
@@ -150,15 +152,14 @@ export function QuestCard({
   const setCheck = (i: 0 | 1 | 2) =>
     dispatch({ type: 'quest.check', questId: quest.id, mallangId: me.id, index: i, value: !checks[i], at: at() })
 
-  const attach = () =>
-    // 실제 업로드는 Storage로 가고 상태에는 URL만 실린다 (handoff §데이터 페칭).
-    dispatch({
-      type: 'quest.photo',
-      questId: quest.id,
-      mallangId: me.id,
-      photoUrl: `https://dummyimage.com/480x360/${field.tint.slice(1)}/6E5A54.png&text=${encodeURIComponent(quest.title)}`,
-      at: at(),
-    })
+  // 사진은 Storage로 가고 상태에는 경로만 실린다. 경로는 서버가 정한다.
+  const attach = async (file: File | undefined) => {
+    if (!file) return
+    setBusy(true)
+    const result = await uploadPhoto(file, quest.id)
+    setBusy(false)
+    if (!result.ok) say(result.error ?? '사진을 올리지 못했어요')
+  }
 
   const deliverReason = !p?.photoUrl
     ? '사진을 첨부해주세요'
@@ -261,17 +262,28 @@ export function QuestCard({
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={attach}
-                  className="squishy rounded-[16px] px-4 py-3 text-[14px] font-bold"
-                  style={{ background: p?.photoUrl ? kind.tint : '#FFFFFF', border: '1.5px solid #E8D9C8' }}
+                <label
+                  className="squishy inline-block rounded-[16px] px-4 py-3 text-[14px] font-bold"
+                  style={{ background: p?.photoUrl ? kind.tint : '#FFFFFF', border: '1.5px solid #E8D9C8', cursor: 'pointer' }}
                 >
-                  {p?.photoUrl ? '사진 다시 고르기' : '사진 첨부하기'}
-                </button>
+                  {busy ? '올리는 중…' : p?.photoUrl ? '사진 다시 고르기' : '사진 첨부하기'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => void attach(e.target.files?.[0])}
+                  />
+                </label>
                 {p?.photoUrl && (
                   <div
                     className="rounded-[12px]"
-                    style={{ width: 64, height: 48, border: '1.5px solid #E8D9C8', background: `center/cover url(${p.photoUrl})` }}
+                    style={{
+                      width: 64,
+                      height: 48,
+                      border: '1.5px solid #E8D9C8',
+                      background: `center/cover url(${photoSrc(p.photoUrl)})`,
+                    }}
                   />
                 )}
                 <PillButton

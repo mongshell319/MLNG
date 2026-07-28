@@ -122,6 +122,8 @@ export interface Village {
   id: string
   estateId: string
   name: string
+  /** 학생이 입장할 때 대는 여섯 글자. 교사 화면이 이 값을 안내한다. */
+  classCode: string
   season: number
   buildings: Record<BuildingKey, 1 | 2 | 3 | 4>
   amenities: string[]

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useNow, useWorld } from '@/lib/client/world'
 import { derivePhase } from '@/lib/domain/phase'
 import { isExpedition } from '@/lib/domain/master'
@@ -28,8 +29,17 @@ import type { Place } from '@/lib/domain/types'
  * 첫 화면(광장)에 학교·수업 관련 단어가 하나도 없어야 한다는 규칙이
  * 가장 엄격하게 걸리는 클라이언트다.
  */
-export default function StudentApp() {
-  const { world, me, note } = useWorld()
+export default function StudentPage() {
+  return (
+    <Suspense fallback={<Loader label="세계로 가는 중이에요" />}>
+      <StudentApp />
+    </Suspense>
+  )
+}
+
+function StudentApp() {
+  const { world, me, note, needsEntry, loading } = useWorld()
+  const params = useSearchParams()
   const now = useNow(500)
   const [place, setPlace] = useState<Place>('plaza')
   const [arrived, setArrived] = useState(false)
@@ -43,8 +53,9 @@ export default function StudentApp() {
     else setPlace('plaza')
   }, [expedition])
 
-  if (!world) return <Loader label="세계로 가는 중이에요" />
-  if (!me) return <Entry world={world} />
+  if (needsEntry) return <Entry classCode={params.get('class') ?? undefined} />
+  if (loading || !world) return <Loader label="세계로 가는 중이에요" />
+  if (!me) return <Entry classCode={params.get('class') ?? undefined} />
 
   if (expedition) {
     return (

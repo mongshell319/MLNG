@@ -11,7 +11,8 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
-Supabase 없이 바로 돈다. 창을 세 개 띄워 두면 함께 움직이는 걸 확인할 수 있다.
+Supabase 없이 바로 돈다. 개발 모드에는 시연용 교실이 하나 들어 있다 —
+**클래스 코드 `MLNG24`, 교사 PIN `demo`** (프로덕션에서는 만들어지지 않는다).
 
 | 열 곳 | 무엇 |
 |---|---|
@@ -20,9 +21,14 @@ Supabase 없이 바로 돈다. 창을 세 개 띄워 두면 함께 움직이는 
 | `/teacher` | **교사 GM** · 발행 · 검증 · 리모컨 · 시즌 |
 | `/print` | **인쇄물 (P1–P3)** · 브라우저 인쇄로 A3 PDF |
 
-**한 바퀴 돌려보기**: `/teacher`에서 **▶ 수업 시작** → `/screen`에 오프닝 40초가 뜬다 →
-`/student`는 마을을 건너뛰고 오늘의 장소에 도착한다 → 학생이 사진·체크 3개를 채우고 **전달** →
-교사 **검증함**에서 탭으로 승인 → 그 순간 C1의 안개가 물러난다 → **정산 시작**.
+**한 바퀴 돌려보기**
+
+1. `/teacher` → `MLNG24` / `demo` 로 입장 (또는 **새 마을 세우기**로 직접 만들기)
+2. **클래스 스크린 열기** → QR을 교실 TV로 찍으면 `/screen`이 그 마을에 붙는다
+3. `/student?class=MLNG24` → 게이트가 열리고 말랑이를 만든다
+4. 교사 화면에서 **▶ 수업 시작** → TV에 오프닝 40초 → 학생은 마을을 건너뛰고 오늘의 장소에 도착
+5. 학생이 사진·체크 3개를 채우고 **전달** → 교사 **검증함**에서 탭으로 승인 → 그 순간 TV의 안개가 물러난다
+6. **정산 시작**
 
 ---
 
@@ -71,6 +77,49 @@ npm run check:rules
 
 ---
 
+## 인증과 권한
+
+**학생에게는 계정도 이메일도 실명도 없다** (§3-5). 그래서 인증의 주체가 사람이 아니라
+"말랑 코드를 쥔 브라우저"다. 교사도 같은 원칙을 따른다 — 클래스 코드와 PIN 한 쌍이 그 마을의 GM 자격이고,
+학교 계정 연동 없이 첫 수업을 열 수 있다.
+
+신원은 세 종류다.
+
+| | 얻는 법 | 할 수 있는 것 |
+|---|---|---|
+| `student` | 클래스 코드로 입장 → 말랑 코드 발급 | 자기 말랑이에 관한 것만 |
+| `gm` | 클래스 코드 + PIN | 세션 · 검증 · 리모컨 · 시즌 |
+| `screen` | GM이 만든 10분짜리 링크를 TV가 한 번 교환 | 보기 + 자기 연출 진행 |
+
+코드는 입장할 때 한 번만 오가고, 이후에는 HttpOnly 서명 쿠키(HMAC-SHA256)만 쓴다.
+PIN은 scrypt로 해시해 저장하고 원문은 어디에도 남지 않는다.
+
+권한은 **리듀서 밖**에서 본다(`lib/domain/authz.ts`). 리듀서는 "무슨 일이 일어나는가"만 알고,
+"누가 그걸 할 수 있는가"는 액션 하나하나에 대해 따로 정해진다. 기본은 거부이므로
+새 액션을 추가하면 등록하기 전까지 아무도 부를 수 없다.
+
+```bash
+npm run dev        # 다른 터미널에서
+npm run check:auth
+```
+
+`scripts/check-auth.mjs`가 실제로 서버를 두드려 본다 — 학생 쿠키로 정산을 시작할 수 있는지,
+남의 말랑이로 전달·구매가 되는지, 옆 마을 사진이 보이는지, 위조 쿠키가 통과하는지.
+한 줄이라도 PASS가 아니면 열면 안 되는 상태다.
+
+### 제출 사진
+
+중학생의 제출물이라 공개 버킷에 두지 않는다.
+
+- 업로드와 상태 반영을 **서버가 한 번에** 한다(`/api/upload`). 클라이언트는 경로를 정하지 못한다 —
+  `quest.photo` 액션이 학생 권한 목록에서 일부러 빠져 있고, 그래서 임의의 외부 주소가
+  교실 TV나 교사 검증함에 렌더될 길이 없다
+- 상태에는 스토리지 경로만 실린다. 보기는 `/api/photo`가 **같은 마을인지 확인한 뒤**
+  60초짜리 서명 URL로 넘긴다
+- 경계는 마을 단위다. 완성된 작품은 복구형 원정의 구조물 파츠로 교실 TV에 함께 걸리기 때문이다
+
+---
+
 ## 구조
 
 ```
@@ -78,8 +127,13 @@ app/
   screen/      C1 — 8상태 상태 머신
   student/     S1–S10 라우터. 원정 중이면 place를 무시하고 필드로 고정
   teacher/     T1–T5 탭 + GM 리모컨 바
-  print/       P1–P3
-  api/world/   GET 스냅샷 · POST 액션 · /stream SSE
+  print/       P1–P3 (GM 전용)
+  api/
+    world/     GET 스냅샷 · POST 액션(권한 검사) · /stream SSE
+    enter/     student · gm · screen 입장
+    village/   새 마을 세우기
+    upload/    제출 사진 (업로드 + 상태 반영)
+    photo/     제출 사진 보기 (서명 URL)
 
 components/
   mallang/     Mallang(M 함수 포팅) · Keeper(터줏말랑 5종)
@@ -89,12 +143,16 @@ components/
   ui/          Icons(계열·클래스·유형) · primitives
 
 lib/
-  domain/      types · master(5분야 마스터 표) · actions · phase · spotlight · seed
-  server/      store (Supabase | 로컬 어댑터)
-  client/      world (구독 + dispatch)
+  domain/      types · master(5분야 마스터 표) · actions · phase · spotlight · seed · authz
+  server/      store(Supabase | 로컬) · auth · registry · realtimeToken · ratelimit
+  client/      world(구독 + dispatch) · photo
 
-supabase/migrations/0001_world.sql
-scripts/check-rules.mjs
+supabase/migrations/
+  0001_world.sql
+  0002_classes_and_private_photos.sql
+scripts/
+  check-rules.mjs   절대 규칙 (정적)
+  check-auth.mjs    권한 경계 (실제 서버를 두드림)
 ```
 
 ### 5분야 마스터 분류표가 단일 축이다
@@ -121,26 +179,52 @@ score = (오늘 전달 − 본인의 최근 평균) + 무대에 못 오른 주 �
 
 ---
 
-## Supabase 붙이기
-
-세 값을 채우면 저장소가 자동으로 바뀐다. 코드 수정은 없다.
+## 배포 (Vercel + Supabase)
 
 ```bash
-cp .env.example .env.local
-# NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
+cp .env.example .env.local        # SESSION_SECRET 은 openssl rand -base64 48
 psql "$DATABASE_URL" -f supabase/migrations/0001_world.sql
+psql "$DATABASE_URL" -f supabase/migrations/0002_classes_and_private_photos.sql
 ```
 
-`worlds` 테이블의 jsonb 한 행이 마을 하나이고, 클라이언트는 그 행의 `postgres_changes`를 구독한다.
-쓰기는 낙관적 잠금(`version`)으로 직렬화되므로 스물여덟 명이 동시에 전달해도 덮어쓰기가 없다.
-RLS는 읽기만 열려 있고 쓰기는 서비스 롤(서버)만 한다 — 학생에게는 계정도 이메일도 없기 때문이다.
+환경변수 네 개가 필요하다. `SESSION_SECRET`(32자 이상), `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, 그리고 실시간 구독을 위한
+`SUPABASE_JWT_SECRET`.
+
+**로컬 어댑터는 프로덕션에서 아예 뜨지 않는다.** 파일 + 인메모리라 인스턴스가 둘이 되는 순간
+세계가 조용히 갈라지기 때문에, Supabase 설정이 없으면 `getStore()`가 명시적으로 실패한다.
+조용히 잘못 도는 것보다 시작하지 않는 편이 낫다.
+
+### 데이터 구조
+
+`worlds` 테이블의 jsonb 한 행이 마을 하나다. 쓰기는 낙관적 잠금(`version`)으로 직렬화되므로
+스물여덟 명이 동시에 전달해도 덮어쓰기가 없고, 충돌하면 최신 상태 위에서 다시 적용한다.
+모든 액션은 `world_events`에 남아 감사와 복구에 쓴다.
 
 **한 행에 몰아넣은 이유**: 세 클라이언트가 봐야 하는 건 "한 순간의 세계 전체"다.
-테이블 여덟 개를 각각 구독하면 정산 시퀀스에서 도착 순서가 어긋난다. 한 반 28명·한 차시 규모에서 스냅샷은 수십 KB다.
-학년 단위 통계가 필요해지면 `world_events` 로그에서 읽기 전용 정규화 테이블을 파생시키면 된다.
+테이블 여덟 개를 각각 구독하면 정산 시퀀스에서 도착 순서가 어긋난다. 한 반 28명·한 차시 규모에서
+스냅샷은 수십 KB다. 학년 단위 통계가 필요해지면 `world_events`에서 읽기 전용 정규화 테이블을
+파생시키면 된다.
 
-Supabase 설정이 없으면 로컬 어댑터로 돈다 — 파일에 얹힌 인메모리 상태 + SSE(`/api/world/stream`).
-계약이 같아서 개발·시연에서도 세 화면이 실제로 함께 움직인다.
+### 실시간 구독의 범위
+
+브라우저가 `worlds` 행을 구독하려면 Supabase 쪽에서도 신원이 있어야 한다. anon 키로 열어 두면
+RLS가 걸 것이 없어서 **다른 학교의 세계까지 전부 구독된다**. 그래서 우리 서버가 쿠키를 확인한 뒤
+`village_id` 클레임 하나만 담은 JWT를 발급하고(`lib/server/realtimeToken.ts`), 정책은 그것만 본다.
+
+```sql
+using (village_id = (auth.jwt() ->> 'village_id'))
+```
+
+토큰에는 마을 말고 아무것도 담지 않는다 — 말랑 코드도 이름도 들어가지 않는다.
+수명은 한 시간이고 클라이언트가 만료 5분 전에 갈아 끼우므로 수업 중에 끊기지 않는다.
+
+### 남은 것
+
+- **레이트 리밋이 인스턴스 단위다**(`lib/server/ratelimit.ts`). 서버리스에서 인스턴스가 여럿이면
+  실제 한도가 그만큼 늘어난다. 이걸 보안 경계로 삼지 않았고(경계는 권한 검사다) 폭주 완충으로만 쓴다.
+  더 엄한 한도가 필요하면 공유 카운터로 바꾸면 된다
+- **에러 로깅·모니터링이 없다**. Sentry 같은 것을 붙일 자리가 아직 비어 있다
 
 ---
 
@@ -159,7 +243,8 @@ Supabase 설정이 없으면 로컬 어댑터로 돈다 — 파일에 얹힌 인
 핸드오프가 플레이스홀더라고 명시한 두 가지를 그대로 뒀다.
 
 - **마을 건물 · 원정 필드 아트** — CSS/SVG 도형. `components/screen/Buildings.tsx`의 성장 4단계 계약만 지키면 일러스트로 교체된다
-- **학생 제출 사진** — 지금은 더미 이미지 URL이 상태에 실린다. Storage 업로드로 바꾸면 `submissions` 버킷 URL이 그대로 들어오고, 복구형 원정은 이 URL을 구조물 파츠로 직접 렌더한다
+제출 사진은 더 이상 플레이스홀더가 아니다 — 실제 업로드가 `submissions` 버킷(비공개)으로 가고,
+복구형 원정이 그 경로를 구조물 파츠로 직접 렌더한다.
 
 ### 확정이 필요한 것 (핸드오프 §확정 필요)
 
@@ -176,6 +261,7 @@ Supabase 설정이 없으면 로컬 어댑터로 돈다 — 파일에 얹힌 인
 npm run dev          # 개발 서버
 npm run build        # 프로덕션 빌드
 npm run typecheck    # tsc --noEmit
-npm run check:rules  # 절대 규칙 체커
-npm run check        # 위 둘
+npm run check:rules  # 절대 규칙 체커 (정적)
+npm run check        # typecheck + check:rules
+npm run check:auth   # 권한 체커 (개발 서버를 띄운 상태에서)
 ```

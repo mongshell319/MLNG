@@ -1,21 +1,22 @@
-import { DEFAULT_VILLAGE, getStore } from '@/lib/server/store'
+import { currentIdentity } from '@/lib/server/auth'
+import { getStore } from '@/lib/server/store'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 /**
- * 로컬 어댑터의 실시간 채널.
+ * 로컬 어댑터의 실시간 채널 (개발용).
  * Supabase를 붙이면 클라이언트가 postgres_changes 를 직접 구독하므로 이 경로는 쓰이지 않는다.
  * 어느 쪽이든 "폴링하지 않는다"는 계약은 같다.
  */
 export async function GET(req: Request) {
-  const villageId = new URL(req.url).searchParams.get('village') ?? DEFAULT_VILLAGE
+  const identity = await currentIdentity()
+  if (!identity) return new Response('입장이 필요해요', { status: 401 })
+
   const store = getStore()
+  if (!store.subscribe) return new Response('stream not available for this store', { status: 501 })
 
-  if (!store.subscribe) {
-    return new Response('stream not available for this store', { status: 501 })
-  }
-
+  const villageId = identity.villageId
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | undefined
   let keepAlive: ReturnType<typeof setInterval> | undefined
@@ -30,7 +31,9 @@ export async function GET(req: Request) {
         }
       }
 
-      send(await store.read(villageId))
+      const initial = await store.read(villageId)
+      if (initial) send(initial)
+
       unsubscribe = store.subscribe!(villageId, send)
       keepAlive = setInterval(() => {
         try {

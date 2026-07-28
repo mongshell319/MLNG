@@ -1,6 +1,7 @@
 'use client'
 
 import { Mallang } from '@/components/mallang/Mallang'
+import { photoSrc } from '@/lib/client/photo'
 import { EXPEDITION_BY_KEY } from '@/lib/domain/master'
 import type { ExpeditionType, WorldSnapshot } from '@/lib/domain/types'
 
@@ -172,7 +173,7 @@ function Repair({ parts }: { parts: (string | null)[] }) {
               strokeDasharray={src ? undefined : '14 12'}
             />
             {src && (
-              <image href={src} x={x + 6} y={y + 6} width={194} height={194} preserveAspectRatio="xMidYMid slice" clipPath="inset(0 round 16px)" />
+              <image href={photoSrc(src) ?? ''} x={x + 6} y={y + 6} width={194} height={194} preserveAspectRatio="xMidYMid slice" clipPath="inset(0 round 16px)" />
             )}
           </g>
         )

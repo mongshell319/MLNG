@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Mallang } from '@/components/mallang/Mallang'
 import { PillButton } from '@/components/ui/primitives'
 import { useWorld } from '@/lib/client/world'
+import { photoSrc } from '@/lib/client/photo'
 import { REJECT_REASONS } from '@/lib/domain/master'
 import type { WorldSnapshot } from '@/lib/domain/types'
 
@@ -89,7 +90,9 @@ export function Verify({ world }: { world: WorldSnapshot }) {
                   style={{
                     aspectRatio: '4 / 3',
                     border: '1.5px solid #E8D9C8',
-                    background: p.photoUrl ? `center/cover url(${p.photoUrl})` : 'linear-gradient(140deg,#FFD6E5,#FFF6EC)',
+                    background: p.photoUrl
+                      ? `center/cover url(${photoSrc(p.photoUrl)})`
+                      : 'linear-gradient(140deg,#FFD6E5,#FFF6EC)',
                   }}
                 />
                 <div className="mt-2 flex items-center gap-2">

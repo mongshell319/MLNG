@@ -3,6 +3,7 @@
 import { useWorld, useNow } from '@/lib/client/world'
 import { derivePhase } from '@/lib/domain/phase'
 import { Loader } from '@/components/ui/primitives'
+import { Mallang } from '@/components/mallang/Mallang'
 import { Stage } from '@/components/screen/Stage'
 import { Panorama } from '@/components/screen/Panorama'
 import { Opening } from '@/components/screen/Opening'
@@ -19,10 +20,27 @@ import { formatClock, remainingSeconds } from '@/lib/domain/phase'
  * 학생이 전달하면 여기 진행도가 1초 안에 움직인다. 그게 이 화면의 전부다.
  */
 export default function ClassScreen() {
-  const { world } = useWorld()
+  const { world, needsEntry, loading } = useWorld()
   const now = useNow(200)
 
-  if (!world) {
+  // TV는 스스로 입장하지 않는다. 교사가 만든 링크를 한 번 열어야 한다.
+  if (needsEntry) {
+    return (
+      <Stage>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-8" style={{ background: '#FFF6EC' }}>
+          <Mallang size={220} face="sleepy" color="#D9D2F5" className="anim-floaty" />
+          <div className="font-display" style={{ fontSize: 64 }}>
+            아직 교실이 열리지 않았어요
+          </div>
+          <div style={{ fontSize: 34, color: '#8C7A72' }}>
+            교사 화면의 <b>클래스 스크린 열기</b>에서 QR을 띄우고, 이 화면으로 찍어 주세요.
+          </div>
+        </div>
+      </Stage>
+    )
+  }
+
+  if (loading || !world) {
     return (
       <Stage>
         <Loader label="교실을 여는 중이에요" />

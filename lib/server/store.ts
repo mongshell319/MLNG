@@ -2,7 +2,6 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { applyAction, type Action } from '@/lib/domain/actions'
-import { seedWorld } from '@/lib/domain/seed'
 import type { WorldSnapshot } from '@/lib/domain/types'
 
 /**
@@ -11,22 +10,22 @@ import type { WorldSnapshot } from '@/lib/domain/types'
  * 세 클라이언트가 하나의 상태를 공유해야 하고, C1의 실시간감이 서비스의 본체이므로
  * 저장소는 (1) 한 번의 원자적 커밋과 (2) 변경 구독, 두 가지만 책임진다.
  *
- *  · SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 가 있으면 Supabase 어댑터.
- *    worlds 테이블의 jsonb 한 행이 마을 하나이고, 클라이언트는 그 행의
- *    postgres_changes 를 구독한다 (폴링 금지 — handoff §데이터 페칭).
- *  · 없으면 로컬 어댑터. 파일에 얹힌 인메모리 상태 + SSE 로 같은 계약을 만족한다.
- *    개발·시연에서 Supabase 프로젝트 없이도 세 화면이 실제로 함께 움직인다.
+ *  · Supabase 어댑터 — worlds 테이블의 jsonb 한 행이 마을 하나다.
+ *    클라이언트는 그 행의 postgres_changes 를 구독한다 (폴링 금지).
+ *  · 로컬 어댑터 — 파일에 얹힌 인메모리 상태 + SSE. 계약이 같아서 개발·시연에서도
+ *    세 화면이 실제로 함께 움직인다. 다만 인스턴스 하나에서만 성립하므로
+ *    프로덕션에서는 아래 getStore()가 아예 뜨지 못하게 막는다.
  */
 
 export interface WorldStore {
   readonly kind: 'supabase' | 'local'
-  read(villageId: string): Promise<WorldSnapshot>
+  /** 없으면 null. 마을 생성은 명시적으로 create 로만 한다. */
+  read(villageId: string): Promise<WorldSnapshot | null>
+  create(villageId: string, snapshot: WorldSnapshot): Promise<WorldSnapshot>
   dispatch(villageId: string, action: Action): Promise<{ snapshot: WorldSnapshot; note?: string }>
   /** 서버 내부 구독 (로컬 어댑터의 SSE 용). Supabase 어댑터는 클라이언트가 직접 구독한다. */
   subscribe?(villageId: string, cb: (s: WorldSnapshot) => void): () => void
 }
-
-export const DEFAULT_VILLAGE = 'v-1'
 
 // ─────────────────────────────────────────────────────────
 // 로컬 어댑터
@@ -44,10 +43,14 @@ interface LocalState {
 const g = globalThis as unknown as { __mallang?: LocalState }
 const local: LocalState = (g.__mallang ??= { worlds: new Map(), listeners: new Map(), queue: Promise.resolve() })
 
+function fileFor(villageId: string): string {
+  // villageId 는 서버가 만든 값이지만, 경로 조작 가능성을 원천 차단한다.
+  return path.join(DATA_DIR, `${villageId.replace(/[^a-zA-Z0-9_-]/g, '')}.json`)
+}
+
 async function loadFromDisk(villageId: string): Promise<WorldSnapshot | null> {
   try {
-    const raw = await fs.readFile(path.join(DATA_DIR, `${villageId}.json`), 'utf8')
-    return JSON.parse(raw) as WorldSnapshot
+    return JSON.parse(await fs.readFile(fileFor(villageId), 'utf8')) as WorldSnapshot
   } catch {
     return null
   }
@@ -56,7 +59,7 @@ async function loadFromDisk(villageId: string): Promise<WorldSnapshot | null> {
 async function saveToDisk(villageId: string, snapshot: WorldSnapshot): Promise<void> {
   try {
     await fs.mkdir(DATA_DIR, { recursive: true })
-    await fs.writeFile(path.join(DATA_DIR, `${villageId}.json`), JSON.stringify(snapshot), 'utf8')
+    await fs.writeFile(fileFor(villageId), JSON.stringify(snapshot), 'utf8')
   } catch {
     // 디스크에 못 써도 세계는 계속 돈다. 메모리가 진실이고 파일은 편의다.
   }
@@ -73,9 +76,13 @@ const localStore: WorldStore = {
     const cached = local.worlds.get(villageId)
     if (cached) return cached
     const disk = await loadFromDisk(villageId)
-    const snapshot = disk ?? seedWorld()
+    if (disk) local.worlds.set(villageId, disk)
+    return disk
+  },
+
+  async create(villageId, snapshot) {
     local.worlds.set(villageId, snapshot)
-    if (!disk) void saveToDisk(villageId, snapshot)
+    await saveToDisk(villageId, snapshot)
     return snapshot
   },
 
@@ -83,6 +90,7 @@ const localStore: WorldStore = {
     // 액션을 직렬화해서 두 클라이언트가 동시에 눌러도 버전이 어긋나지 않게 한다.
     const run = local.queue.then(async () => {
       const current = await localStore.read(villageId)
+      if (!current) throw new Error(`village not found: ${villageId}`)
       const result = applyAction(current, action)
       local.worlds.set(villageId, result.snapshot)
       void saveToDisk(villageId, result.snapshot)
@@ -108,7 +116,7 @@ const localStore: WorldStore = {
 // Supabase 어댑터
 // ─────────────────────────────────────────────────────────
 
-function serviceClient(): SupabaseClient | null {
+export function serviceClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
@@ -126,17 +134,22 @@ function makeSupabaseStore(client: SupabaseClient): WorldStore {
         .eq('village_id', villageId)
         .maybeSingle()
       if (error) throw new Error(`world read failed: ${error.message}`)
-      if (data?.snapshot) return data.snapshot as WorldSnapshot
+      return (data?.snapshot as WorldSnapshot | undefined) ?? null
+    },
 
-      const fresh = seedWorld()
-      await client.from('worlds').insert({ village_id: villageId, snapshot: fresh, version: fresh.version })
-      return fresh
+    async create(villageId, snapshot) {
+      const { error } = await client
+        .from('worlds')
+        .insert({ village_id: villageId, snapshot, version: snapshot.version })
+      if (error) throw new Error(`world create failed: ${error.message}`)
+      return snapshot
     },
 
     async dispatch(villageId, action) {
       // 낙관적 잠금 — 같은 순간 들어온 다른 전달을 덮어쓰지 않는다.
-      for (let attempt = 0; attempt < 5; attempt++) {
+      for (let attempt = 0; attempt < 6; attempt++) {
         const current = await this.read(villageId)
+        if (!current) throw new Error(`village not found: ${villageId}`)
         const result = applyAction(current, action)
         const { data, error } = await client
           .from('worlds')
@@ -145,7 +158,14 @@ function makeSupabaseStore(client: SupabaseClient): WorldStore {
           .eq('version', current.version)
           .select('village_id')
         if (error) throw new Error(`world write failed: ${error.message}`)
-        if (data && data.length > 0) return result
+        if (data && data.length > 0) {
+          void client
+            .from('world_events')
+            .insert({ village_id: villageId, action, version: result.snapshot.version })
+          return result
+        }
+        // 다른 전달이 먼저 들어갔다. 최신 상태 위에서 다시 적용한다.
+        await new Promise((r) => setTimeout(r, 20 + attempt * 30))
       }
       throw new Error('world write failed: too many concurrent writers')
     },
@@ -157,7 +177,19 @@ let store: WorldStore | null = null
 export function getStore(): WorldStore {
   if (store) return store
   const client = serviceClient()
-  store = client ? makeSupabaseStore(client) : localStore
+  if (!client) {
+    if (process.env.NODE_ENV === 'production') {
+      // 로컬 어댑터는 인스턴스 하나에서만 성립한다. 서버가 두 대 뜨는 순간
+      // 세계가 조용히 갈라지므로, 프로덕션에서는 시작 자체를 막는다.
+      throw new Error(
+        'Supabase 설정이 필요합니다 (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY). ' +
+          '로컬 어댑터는 개발 전용입니다.',
+      )
+    }
+    store = localStore
+    return store
+  }
+  store = makeSupabaseStore(client)
   return store
 }
 

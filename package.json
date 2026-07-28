@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check:rules": "node scripts/check-rules.mjs",
-    "check": "npm run typecheck && npm run check:rules"
+    "check": "npm run typecheck && npm run check:rules",
+    "check:auth": "node scripts/check-auth.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

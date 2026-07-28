@@ -6,7 +6,6 @@ import { Keeper } from '@/components/mallang/Keeper'
 import { PillButton } from '@/components/ui/primitives'
 import { useWorld } from '@/lib/client/world'
 import { BODY_TINTS } from '@/lib/domain/master'
-import type { WorldSnapshot } from '@/lib/domain/types'
 
 /**
  * S1 — 입장 · 캐릭터 생성.
@@ -15,59 +14,102 @@ import type { WorldSnapshot } from '@/lib/domain/types'
  * 게이트가 열리고 → 세계가 보이고 → 터줏말랑이 말을 걸고 →
  * 그 대화 안에서 이름과 색을 정하고 → 이세계 주민등록증으로 끝난다.
  *
- * 실명·이메일 필드는 없다. 학생 식별은 말랑이 이름과 말랑 코드뿐이다 (§3-5).
+ * 실명·이메일 필드는 없다 (§3-5). 말랑 코드는 서버가 만들고,
+ * 한 번 확인한 뒤로는 서명 쿠키만 오간다 — 코드가 요청마다 돌아다니지 않는다.
  */
 
-type Step = 'gate' | 'greet' | 'color' | 'name' | 'card' | 'code'
+type Step = 'gate' | 'class' | 'greet' | 'color' | 'name' | 'card' | 'resume'
 
-function newCode(): string {
-  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
-  const D = '23456789'
-  const pick = (s: string) => s[Math.floor(Math.random() * s.length)]
-  return pick(A) + pick(A) + pick(D) + pick(D) + pick(A) + pick(D)
-}
-
-export function Entry({ world }: { world: WorldSnapshot }) {
-  const { dispatch, setMyCode } = useWorld()
+export function Entry({ classCode: initialClass }: { classCode?: string }) {
+  const { refresh } = useWorld()
   const [step, setStep] = useState<Step>('gate')
+  const [classCode, setClassCode] = useState((initialClass ?? '').toUpperCase())
+  const [villageName, setVillageName] = useState('')
   const [color, setColor] = useState(BODY_TINTS[0])
   const [name, setName] = useState('')
-  const [code, setCode] = useState('')
+  const [mallangCode, setMallangCode] = useState('')
   const [madeCode, setMadeCode] = useState('')
-  const [codeNote, setCodeNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState('')
 
+  // 게이트가 열리고 나면 코드가 이미 있으면(QR로 들어온 경우) 바로 대화로 넘어간다.
   useEffect(() => {
     if (step !== 'gate') return
-    const id = setTimeout(() => setStep('greet'), 2600)
+    const id = setTimeout(() => setStep(classCode.length === 6 ? 'greet' : 'class'), 2400)
     return () => clearTimeout(id)
-  }, [step])
+  }, [step, classCode])
+
+  // 마을 이름을 미리 알아 두면 터줏말랑이 이름을 부르며 맞이할 수 있다.
+  useEffect(() => {
+    if (classCode.length !== 6) return
+    let alive = true
+    void fetch(`/api/enter/student?class=${classCode}`)
+      .then((r) => r.json())
+      .then((j: { villageName?: string }) => {
+        if (alive && j.villageName) setVillageName(j.villageName)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [classCode])
+
+  const checkClass = async () => {
+    setProblem('')
+    if (classCode.length !== 6) {
+      setProblem('코드 6자리를 입력해주세요')
+      return
+    }
+    setBusy(true)
+    const res = await fetch(`/api/enter/student?class=${classCode}`)
+    const json = (await res.json()) as { villageName?: string; error?: string }
+    setBusy(false)
+    if (!res.ok) {
+      setProblem(json.error ?? '그 코드의 마을을 찾지 못했어요')
+      return
+    }
+    setVillageName(json.villageName ?? '')
+    setStep('greet')
+  }
 
   const create = async () => {
-    const c = newCode()
-    setMadeCode(c)
-    await dispatch({
-      type: 'mallang.create',
-      id: `m-${Date.now()}`,
-      code: c,
-      name: name.trim() || '이름없는말랑',
-      bodyColor: color,
-      hallId: world.halls[0]?.id ?? 'hall-1',
-      at: new Date().toISOString(),
+    setProblem('')
+    setBusy(true)
+    const res = await fetch('/api/enter/student', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ classCode, name: name.trim(), bodyColor: color }),
     })
+    const json = (await res.json()) as { code?: string; error?: string }
+    setBusy(false)
+    if (!res.ok || !json.code) {
+      setProblem(json.error ?? '지금은 들어가지 못했어요')
+      return
+    }
+    setMadeCode(json.code)
     setStep('card')
   }
 
-  const resume = () => {
-    const up = code.toUpperCase()
-    if (up.length !== 6) {
-      setCodeNote('코드 6자리를 입력해주세요')
+  const resume = async () => {
+    setProblem('')
+    const code = mallangCode.toUpperCase().trim()
+    if (code.length !== 6) {
+      setProblem('코드 6자리를 입력해주세요')
       return
     }
-    if (!world.mallangs.some((m) => m.code === up)) {
-      setCodeNote('그 코드의 말랑이를 아직 못 찾았어요')
+    setBusy(true)
+    const res = await fetch('/api/enter/student', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ classCode, mallangCode: code }),
+    })
+    const json = (await res.json()) as { error?: string }
+    setBusy(false)
+    if (!res.ok) {
+      setProblem(json.error ?? '그 코드의 말랑이를 아직 못 찾았어요')
       return
     }
-    setMyCode(up)
+    await refresh()
   }
 
   // 어두운 화면에서 게이트가 열린다
@@ -89,34 +131,33 @@ export function Entry({ world }: { world: WorldSnapshot }) {
     )
   }
 
-  if (step === 'code') {
+  if (step === 'class') {
+    return (
+      <Scene>
+        <Keeper field="care" size={140} className="anim-floaty" />
+        <Bubble>어디에서 왔니? 문에 적힌 여섯 글자를 알려 줘.</Bubble>
+        <CodeInput value={classCode} onChange={setClassCode} placeholder="클래스 코드" />
+        <Problem text={problem} />
+        <PillButton tint="#FFC9B5" fg="#C96B4A" size="lg" onClick={checkClass} disabled={busy}>
+          {busy ? '보는 중…' : '문 두드리기'}
+        </PillButton>
+      </Scene>
+    )
+  }
+
+  if (step === 'resume') {
     return (
       <Scene>
         <Keeper field="care" size={130} className="anim-floaty" />
         <Bubble>이미 말랑이가 있구나. 코드를 알려 줘.</Bubble>
-        <input
-          value={code}
-          onChange={(e) => {
-            setCode(e.target.value.toUpperCase().slice(0, 6))
-            setCodeNote('')
-          }}
-          placeholder="말랑 코드 6자"
-          inputMode="text"
-          autoCapitalize="characters"
-          className="w-[260px] px-6 py-3 text-center text-[20px] font-bold tracking-[0.2em]"
-          style={{ background: '#FFFFFF', border: '1.5px solid #E8D9C8' }}
-        />
-        {codeNote && (
-          <div className="text-[14px]" style={{ color: '#8C7A72' }}>
-            {codeNote}
-          </div>
-        )}
+        <CodeInput value={mallangCode} onChange={setMallangCode} placeholder="말랑 코드 6자" />
+        <Problem text={problem} />
         <div className="flex gap-3">
           <PillButton tint="#FFFFFF" line="#E8D9C8" onClick={() => setStep('greet')}>
             뒤로
           </PillButton>
-          <PillButton tint="#FFC9B5" fg="#C96B4A" onClick={resume}>
-            이어받기
+          <PillButton tint="#FFC9B5" fg="#C96B4A" onClick={resume} disabled={busy}>
+            {busy ? '찾는 중…' : '이어받기'}
           </PillButton>
         </div>
       </Scene>
@@ -128,15 +169,15 @@ export function Entry({ world }: { world: WorldSnapshot }) {
       <Scene>
         <Keeper field="care" size={150} className="anim-floaty" />
         <Bubble>
-          어서 와. 여기가 {world.village.name}이야.
+          어서 와. 여기가 {villageName || '우리 마을'}이야.
           <br />
           네 이름은 뭐라고 부를까?
         </Bubble>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <PillButton tint="#FFC9B5" fg="#C96B4A" size="lg" onClick={() => setStep('color')}>
             이름 지으러 가기
           </PillButton>
-          <PillButton tint="#FFFFFF" line="#E8D9C8" size="lg" onClick={() => setStep('code')}>
+          <PillButton tint="#FFFFFF" line="#E8D9C8" size="lg" onClick={() => setStep('resume')}>
             말랑이가 이미 있어요
           </PillButton>
         </div>
@@ -187,20 +228,30 @@ export function Entry({ world }: { world: WorldSnapshot }) {
         <div className="text-[14px]" style={{ color: '#8C7A72' }}>
           실명 말고, 부르고 싶은 이름!
         </div>
+        <Problem text={problem} />
         <PillButton
           tint="#FFC9B5"
           fg="#C96B4A"
           size="lg"
           reason={name.trim() ? undefined : '이름을 지어 주세요'}
           onClick={create}
+          disabled={busy}
         >
-          이 이름으로 살래
+          {busy ? '들어가는 중…' : '이 이름으로 살래'}
         </PillButton>
       </Scene>
     )
   }
 
-  return <IdCard world={world} name={name || '이름없는말랑'} color={color} code={madeCode} onEnter={() => setMyCode(madeCode)} />
+  return (
+    <IdCard
+      villageName={villageName}
+      name={name || '이름없는말랑'}
+      color={color}
+      code={madeCode}
+      onEnter={() => void refresh()}
+    />
+  )
 }
 
 function Scene({ children }: { children: React.ReactNode }) {
@@ -225,15 +276,48 @@ function Bubble({ children }: { children: React.ReactNode }) {
   )
 }
 
+function CodeInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 6))}
+      placeholder={placeholder}
+      inputMode="text"
+      autoCapitalize="characters"
+      autoComplete="off"
+      className="w-[280px] px-6 py-3 text-center text-[20px] font-bold tracking-[0.2em]"
+      style={{ background: '#FFFFFF', border: '1.5px solid #E8D9C8' }}
+    />
+  )
+}
+
+/** 안내는 안내지 경고가 아니다. 빨강을 쓰지 않는다 (§3-3). */
+function Problem({ text }: { text: string }) {
+  if (!text) return null
+  return (
+    <div className="anim-popin text-[14px]" style={{ color: '#8C7A72' }}>
+      {text}
+    </div>
+  )
+}
+
 /** 이세계 주민등록증 — 코팅해서 나눠 주면 P1 모험가 증표가 된다. */
 function IdCard({
-  world,
+  villageName,
   name,
   color,
   code,
   onEnter,
 }: {
-  world: WorldSnapshot
+  villageName: string
   name: string
   color: string
   code: string
@@ -244,7 +328,7 @@ function IdCard({
   useEffect(() => {
     let alive = true
     void import('qrcode').then(async (mod) => {
-      const url = await mod.toDataURL(`${location.origin}/student?code=${code}`, {
+      const url = await mod.toDataURL(code, {
         margin: 1,
         color: { dark: '#6E5A54', light: '#FFF6EC' },
         width: 220,
@@ -270,11 +354,14 @@ function IdCard({
           <div className="text-left">
             <div className="font-display text-[26px]">{name}</div>
             <div className="mt-1 text-[13px]" style={{ color: '#8C7A72' }}>
-              {world.village.name} · 시즌 {world.village.season}
+              {villageName || '우리 마을'}
             </div>
           </div>
         </div>
-        <div className="mt-5 flex items-center justify-between rounded-[16px] px-4 py-3" style={{ background: '#FFFFFF', border: '1.5px solid #E8D9C8' }}>
+        <div
+          className="mt-5 flex items-center justify-between rounded-[16px] px-4 py-3"
+          style={{ background: '#FFFFFF', border: '1.5px solid #E8D9C8' }}
+        >
           <div>
             <div className="text-[12px]" style={{ color: '#B8A99E' }}>
               말랑 코드
@@ -290,7 +377,7 @@ function IdCard({
         </div>
       </div>
       <div className="max-w-[340px] text-[14px]" style={{ color: '#8C7A72' }}>
-        이 코드로 학년이 바뀌어도 같은 말랑이를 이어받아요.
+        이 코드로 학년이 바뀌어도 같은 말랑이를 이어받아요. 적어 두거나 증표를 챙겨 두세요.
       </div>
       <PillButton tint="#FFC9B5" fg="#C96B4A" size="lg" onClick={onEnter}>
         마을로 들어가기
