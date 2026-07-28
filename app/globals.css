@@ -69,7 +69,6 @@
   }
   button {
     cursor: pointer;
-    white-space: nowrap;
   }
   a {
     color: var(--color-deep-lavender);

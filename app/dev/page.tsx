@@ -76,6 +76,17 @@ export default function DevConsole() {
 
   const openWindow = (path: string) => window.open(path, '_blank', 'noopener')
 
+  /** 폰 세로(390×844)로 띄운다. 광장·필드가 좁은 화면에서 어떻게 보이는지 바로 확인용. */
+  const openPhone = (path: string) =>
+    window.open(path, 'mallang-phone', 'width=390,height=844,noopener')
+
+  /** 입장 의식을 건너뛰고 기존 말랑이로 바로 들어간다. GM 쿠키는 그대로 살아 있다. */
+  const enterAsStudent = async (code?: string) => {
+    const json = (await dev({ op: 'asStudent', mallangCode: code })) as { name?: string }
+    if (json?.name) say(`${json.name}(으)로 들어갔어요`)
+    return json
+  }
+
   const openScreen = async () => {
     const res = await fetch('/api/enter/screen', { method: 'POST' })
     const json = (await res.json()) as { token?: string; error?: string }
@@ -119,7 +130,54 @@ export default function DevConsole() {
         </Row>
       </Section>
 
-      <Section title="2. 학생 대신 전달하기" hint="브라우저를 스무 개 띄우는 대신 서버가 눌러 줍니다.">
+      <Section
+        title="2. 학생으로 바로 들어가기"
+        hint="게이트 → 색 → 이름 의식을 건너뜁니다. 학생 쿠키만 바꾸므로 이 창의 GM 자격은 그대로예요."
+      >
+        <Row>
+          <PillButton
+            tint="#FFC9B5"
+            fg="#C96B4A"
+            onClick={() =>
+              run('asStudent', async () => {
+                await enterAsStudent()
+                openWindow('/student')
+              })
+            }
+          >
+            {busy === 'asStudent' ? '들어가는 중…' : '아무 말랑이로 입장 + 열기'}
+          </PillButton>
+          <PillButton
+            tint="#FFF6EC"
+            line="#E8D9C8"
+            onClick={() =>
+              run('asStudentPhone', async () => {
+                await enterAsStudent()
+                openPhone('/student')
+              })
+            }
+          >
+            폰 크기(390×844)로 열기
+          </PillButton>
+        </Row>
+        <Row>
+          {world.mallangs.slice(0, 8).map((m) => (
+            <button
+              key={m.id}
+              onClick={() => void run('as' + m.id, async () => {
+                await enterAsStudent(m.code)
+                openWindow('/student')
+              })}
+              className="squishy rounded-full px-3 py-1.5 text-[12px] font-bold"
+              style={{ background: m.bodyColor, border: '1.5px solid #E8D9C8' }}
+            >
+              {m.name}
+            </button>
+          ))}
+        </Row>
+      </Section>
+
+      <Section title="3. 학생 대신 전달하기" hint="브라우저를 스무 개 띄우는 대신 서버가 눌러 줍니다.">
         <Row>
           <label className="flex items-center gap-3 text-[14px]">
             <span style={{ color: '#8C7A72' }}>인원</span>
@@ -157,7 +215,7 @@ export default function DevConsole() {
         </div>
       </Section>
 
-      <Section title="3. 상태로 바로 가기" hint="오프닝 40초·정산 125초를 기다리지 않고 원하는 지점에서 시작합니다.">
+      <Section title="4. 상태로 바로 가기" hint="오프닝 40초·정산 125초를 기다리지 않고 원하는 지점에서 시작합니다.">
         <Row>
           <Jump label="원정 전" onClick={() => dispatch({ type: 'session.reset', at: at() })} />
           <Jump label="오프닝 처음" onClick={() => openAt(0)} />
@@ -202,7 +260,7 @@ export default function DevConsole() {
         </Row>
       </Section>
 
-      <Section title="4. 원정 유형 7종" hint="유형마다 필드 진행 시각화가 다릅니다. 교실 TV를 열어 두고 눌러 보세요.">
+      <Section title="5. 원정 유형 7종" hint="유형마다 필드 진행 시각화가 다릅니다. 교실 TV를 열어 두고 눌러 보세요.">
         <Row>
           {EXPEDITIONS.map((e) => (
             <Jump
@@ -222,7 +280,7 @@ export default function DevConsole() {
         </div>
       </Section>
 
-      <Section title="5. 세계 되돌리기" hint="시연 데이터(주민 28명·지난 기록)로 다시 채웁니다.">
+      <Section title="6. 세계 되돌리기" hint="시연 데이터(주민 28명·지난 기록)로 다시 채웁니다.">
         <Row>
           <PillButton tint="#FFF6EC" line="#E8D9C8" onClick={() => run('reset', () => dev({ op: 'reset', demo: true }))}>
             {busy === 'reset' ? '되돌리는 중…' : '시연 상태로 리셋'}

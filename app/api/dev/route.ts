@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { currentIdentity } from '@/lib/server/auth'
+import { cookieNameFor, cookieOptions, currentIdentity, sign } from '@/lib/server/auth'
 import { devToolsEnabled } from '@/lib/server/devtools'
 import { getStore } from '@/lib/server/store'
 import { seedWorld } from '@/lib/domain/seed'
@@ -18,7 +18,9 @@ export const runtime = 'nodejs'
  */
 
 interface Body {
-  op: 'deliver' | 'reset' | 'clearProgress'
+  op: 'deliver' | 'reset' | 'clearProgress' | 'asStudent'
+  /** asStudent: 어느 말랑이가 될지. 없으면 아무나. */
+  mallangCode?: string
   /** deliver: 몇 명이 전달할지 */
   count?: number
   /** deliver: GM 승인까지 할지 */
@@ -75,6 +77,22 @@ export async function POST(req: Request) {
 
   const world = await store.read(identity.villageId)
   if (!world) return NextResponse.json({ error: '마을을 찾지 못했어요' }, { status: 404 })
+
+  if (body.op === 'asStudent') {
+    // 입장 의식(게이트 → 색 → 이름)을 매번 거치지 않고 바로 학생이 된다.
+    // 학생 쿠키만 건드리므로 GM 쿠키는 그대로 살아 있다.
+    const wanted = body.mallangCode?.toUpperCase()
+    const target = wanted ? world.mallangs.find((m) => m.code === wanted) : world.mallangs[0]
+    if (!target) return NextResponse.json({ error: '그 말랑이를 찾지 못했어요' }, { status: 404 })
+
+    const res = NextResponse.json({ ok: true, code: target.code, name: target.name })
+    res.cookies.set(
+      cookieNameFor('student'),
+      sign({ kind: 'student', villageId: target.villageId, hallId: target.hallId, code: target.code }),
+      cookieOptions(),
+    )
+    return res
+  }
 
   if (body.op === 'clearProgress') {
     const cleared: WorldSnapshot = {

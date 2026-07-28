@@ -55,9 +55,12 @@ export function PlaceShell({
 
       <main className="flex-1">{children}</main>
 
-      {/* 하단에 지도 버튼 하나만 */}
+      {/* 하단에 지도 버튼 하나만. 스크롤 내용이 비쳐 보이지 않게 바탕을 깐다. */}
       {place !== 'map' && (
-        <div className="sticky bottom-0 flex justify-center px-5 pb-5 pt-3">
+        <div
+          className="sticky bottom-0 flex justify-center px-5 pb-5 pt-3"
+          style={{ background: 'linear-gradient(rgba(255,246,236,0) 0%, #FFF6EC 45%)' }}
+        >
           <button
             onClick={() => go('map')}
             className="squishy flex items-center gap-2 rounded-full px-6 py-3 text-[15px] font-bold"

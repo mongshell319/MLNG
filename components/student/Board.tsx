@@ -53,9 +53,10 @@ export function Board({ world, me }: { world: WorldSnapshot; me: MallangType }) 
         className="mt-4 rounded-[20px] p-5"
         style={{ background: 'linear-gradient(#F3E3CC, #EAD9C2)', border: '1.5px solid #C96B4A' }}
       >
+        {/* min-w-0 이 없으면 그리드 칸이 내용 폭 아래로 줄지 않아 폰에서 화면을 밀어낸다 */}
         <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
           {/* 중앙 · 오늘의 의뢰 */}
-          <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4">
             {main.length === 0 && <EmptyDay />}
             {main.map((q) => (
               <QuestCard key={q.id} quest={q} world={world} me={me} big />
@@ -65,7 +66,7 @@ export function Board({ world, me }: { world: WorldSnapshot; me: MallangType }) 
           </div>
 
           {/* 우측 · 사이드 쪽지와 원정 일정 */}
-          <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4">
             <div className="text-[13px] font-bold" style={{ color: '#8C7A72' }}>
               골라서 해도 되는 것
             </div>
@@ -247,7 +248,7 @@ export function QuestCard({
                   <button
                     key={c}
                     onClick={() => setCheck(i as 0 | 1 | 2)}
-                    className="squishy flex items-center gap-3 rounded-full px-4 py-2 text-left text-[14px]"
+                    className="squishy flex items-start gap-3 rounded-[18px] px-4 py-2 text-left text-[14px]"
                     style={{ background: checks[i] ? kind.tint : '#FFFFFF', border: '1.5px solid #E8D9C8' }}
                   >
                     <span
