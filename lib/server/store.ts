@@ -22,6 +22,11 @@ export interface WorldStore {
   /** 없으면 null. 마을 생성은 명시적으로 create 로만 한다. */
   read(villageId: string): Promise<WorldSnapshot | null>
   create(villageId: string, snapshot: WorldSnapshot): Promise<WorldSnapshot>
+  /**
+   * 스냅샷을 통째로 갈아 끼우고 구독자에게 알린다.
+   * 리듀서를 거치지 않는 유일한 경로라서 시연 도구(app/api/dev)에서만 쓴다.
+   */
+  overwrite(villageId: string, snapshot: WorldSnapshot): Promise<WorldSnapshot>
   dispatch(villageId: string, action: Action): Promise<{ snapshot: WorldSnapshot; note?: string }>
   /** 서버 내부 구독 (로컬 어댑터의 SSE 용). Supabase 어댑터는 클라이언트가 직접 구독한다. */
   subscribe?(villageId: string, cb: (s: WorldSnapshot) => void): () => void
@@ -87,6 +92,13 @@ const localStore: WorldStore = {
     return snapshot
   },
 
+  async overwrite(villageId, snapshot) {
+    local.worlds.set(villageId, snapshot)
+    await saveToDisk(villageId, snapshot)
+    emit(villageId, snapshot)
+    return snapshot
+  },
+
   async dispatch(villageId, action) {
     // 액션을 직렬화해서 두 클라이언트가 동시에 눌러도 버전이 어긋나지 않게 한다.
     const run = local.queue.then(async () => {
@@ -143,6 +155,15 @@ function makeSupabaseStore(client: SupabaseClient): WorldStore {
         .from('worlds')
         .insert({ village_id: villageId, snapshot, version: snapshot.version })
       if (error) throw new Error(`world create failed: ${error.message}`)
+      return snapshot
+    },
+
+    async overwrite(villageId, snapshot) {
+      const { error } = await client
+        .from('worlds')
+        .update({ snapshot, version: snapshot.version })
+        .eq('village_id', villageId)
+      if (error) throw new Error(`world overwrite failed: ${error.message}`)
       return snapshot
     },
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useWorld } from '@/lib/client/world'
 import { Loader, Toast } from '@/components/ui/primitives'
@@ -31,6 +31,14 @@ type TabKey = (typeof TABS)[number]['key']
 export default function TeacherApp() {
   const { world, note, needsEntry, loading, identity, refresh } = useWorld()
   const [tab, setTab] = useState<TabKey>('publish')
+  const [devTools, setDevTools] = useState(false)
+
+  useEffect(() => {
+    void fetch('/api/dev')
+      .then((r) => r.json())
+      .then((j: { enabled?: boolean }) => setDevTools(Boolean(j.enabled)))
+      .catch(() => undefined)
+  }, [])
 
   if (needsEntry) return <GmGate />
   if (loading || !world) return <Loader label="교무실을 여는 중이에요" />
@@ -40,7 +48,7 @@ export default function TeacherApp() {
   const pending = world.progress.filter((p) => p.status === 'delivering').length
 
   const leave = async () => {
-    await fetch('/api/leave', { method: 'POST' })
+    await fetch('/api/leave?as=gm', { method: 'POST' })
     await refresh()
   }
 
@@ -54,6 +62,15 @@ export default function TeacherApp() {
           {world.village.name} · {world.halls[0]?.name}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          {devTools && (
+            <Link
+              href="/dev"
+              className="squishy rounded-full px-4 py-2 text-[13px] font-bold"
+              style={{ background: '#FFF0B3', color: '#B8933A', border: '1.5px solid #B8933A' }}
+            >
+              시연 콘솔
+            </Link>
+          )}
           <ScreenLink />
           <button
             onClick={leave}

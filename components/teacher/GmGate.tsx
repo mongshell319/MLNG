@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Keeper } from '@/components/mallang/Keeper'
 import { PillButton } from '@/components/ui/primitives'
 import { useWorld } from '@/lib/client/world'
@@ -23,6 +23,17 @@ export function GmGate() {
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState('')
   const [madeCode, setMadeCode] = useState('')
+  const [demo, setDemo] = useState<{ classCode: string; pin: string } | null>(null)
+
+  // 개발·시연 환경에서는 시연 교실이 하나 있다. 매번 외워서 치지 않도록 채워 둔다.
+  useEffect(() => {
+    void fetch('/api/dev')
+      .then((r) => r.json())
+      .then((j: { demo?: { classCode: string; pin: string } | null }) => {
+        if (j.demo) setDemo(j.demo)
+      })
+      .catch(() => undefined)
+  }, [])
 
   const enter = async () => {
     setProblem('')
@@ -87,6 +98,19 @@ export function GmGate() {
     <Shell>
       <Keeper field="making" size={110} className="anim-floaty" />
       <div className="font-display text-[24px]">말랑스쿨 GM</div>
+
+      {demo && mode === 'enter' && (
+        <button
+          onClick={() => {
+            setClassCode(demo.classCode)
+            setPin(demo.pin)
+          }}
+          className="squishy rounded-full px-5 py-2 text-[13px] font-bold"
+          style={{ background: '#FFF0B3', color: '#B8933A', border: '1.5px solid #B8933A' }}
+        >
+          시연 교실로 채우기 ({demo.classCode})
+        </button>
+      )}
 
       <div className="flex gap-2">
         <Tab on={mode === 'enter'} onClick={() => setMode('enter')}>

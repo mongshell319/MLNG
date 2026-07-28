@@ -24,7 +24,7 @@ const ALLOWED: Record<string, string> = {
  * 서버만 만든다. 상태에는 스토리지 경로만 실리고, 보기는 /api/photo 를 거친다.
  */
 export async function POST(req: Request) {
-  const identity = await currentIdentity()
+  const identity = await currentIdentity('student')
   if (!identity || identity.kind !== 'student') {
     return NextResponse.json({ error: '학생만 올릴 수 있어요' }, { status: 403 })
   }

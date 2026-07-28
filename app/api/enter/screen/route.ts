@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import {
-  COOKIE_NAME,
+  cookieNameFor,
   SCREEN_TOKEN_TTL_MS,
   cookieOptions,
   currentIdentity,
@@ -35,6 +35,6 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL('/screen?expired=1', req.url))
   }
   const res = NextResponse.redirect(new URL('/screen', req.url))
-  res.cookies.set(COOKIE_NAME, sign(identity), cookieOptions())
+  res.cookies.set(cookieNameFor('screen'), sign(identity), cookieOptions())
   return res
 }

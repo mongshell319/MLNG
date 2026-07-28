@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import type { Action } from '@/lib/domain/actions'
 import type { Mallang, WorldSnapshot } from '@/lib/domain/types'
 
@@ -9,7 +10,17 @@ import type { Mallang, WorldSnapshot } from '@/lib/domain/types'
  *
  * 어느 마을을 볼지는 쿠키 속 신원이 정한다 — 클라이언트가 마을을 고르지 않는다.
  * 구독은 Supabase Realtime(설정된 경우) 또는 SSE. 어느 쪽도 폴링하지 않는다.
+ *
+ * 역할은 지금 있는 경로가 알려 준다. 역할마다 쿠키가 따로라서, 한 브라우저에서
+ * 교사·학생·교실 TV를 동시에 열어 둘 수 있다 — 시연할 때 창 세 개면 끝난다.
  */
+
+function roleForPath(pathname: string): 'student' | 'gm' | 'screen' | null {
+  if (pathname.startsWith('/student')) return 'student'
+  if (pathname.startsWith('/screen')) return 'screen'
+  if (pathname.startsWith('/teacher') || pathname.startsWith('/print') || pathname.startsWith('/dev')) return 'gm'
+  return null
+}
 
 export interface ClientIdentity {
   kind: 'student' | 'gm' | 'screen'
@@ -20,6 +31,8 @@ export interface ClientIdentity {
 interface WorldContextValue {
   world: WorldSnapshot | null
   identity: ClientIdentity | null
+  /** 이 화면이 어떤 역할로 서버에 말하는가 */
+  role: 'student' | 'gm' | 'screen' | null
   /** 아직 입장하지 않았다 — 각 클라이언트가 자기 입장 화면을 띄운다 */
   needsEntry: boolean
   loading: boolean
@@ -35,6 +48,8 @@ interface WorldContextValue {
 const WorldContext = createContext<WorldContextValue | null>(null)
 
 export function WorldProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const role = roleForPath(pathname ?? '')
   const [world, setWorld] = useState<WorldSnapshot | null>(null)
   const [identity, setIdentity] = useState<ClientIdentity | null>(null)
   const [needsEntry, setNeedsEntry] = useState(false)
@@ -88,7 +103,7 @@ export function WorldProvider({ children }: { children: React.ReactNode }) {
         // 토큰이 만료되기 전에 새로 받아 끼운다. 수업 중에 연결이 끊기면 안 된다.
         const renew = setInterval(
           () => {
-            void fetch('/api/world', { cache: 'no-store' })
+            void fetch(`/api/world?as=${role}`, { cache: 'no-store' })
               .then((r) => (r.ok ? r.json() : null))
               .then((j: { realtimeToken?: string } | null) => {
                 if (j?.realtimeToken) void client.realtime.setAuth(j.realtimeToken)
@@ -106,17 +121,23 @@ export function WorldProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      const source = new EventSource('/api/world/stream')
+      const source = new EventSource(`/api/world/stream?as=${role}`)
       source.onmessage = (e) => accept(JSON.parse(e.data) as WorldSnapshot)
       setTransport('sse')
       cleanup.current = () => source.close()
     },
-    [accept],
+    [accept, role],
   )
 
   const refresh = useCallback(async () => {
+    // 입구(/)처럼 역할이 없는 화면은 세계를 잡지 않는다.
+    if (!role) {
+      setLoading(false)
+      setNeedsEntry(false)
+      return
+    }
     setLoading(true)
-    const res = await fetch('/api/world', { cache: 'no-store' })
+    const res = await fetch(`/api/world?as=${role}`, { cache: 'no-store' })
 
     if (res.status === 401 || res.status === 404) {
       cleanup.current?.()
@@ -142,7 +163,7 @@ export function WorldProvider({ children }: { children: React.ReactNode }) {
     setNeedsEntry(false)
     setLoading(false)
     await connect(json.identity.villageId, json.transport, json.realtimeToken, json.realtimeTtlSeconds ?? 3600)
-  }, [accept, connect])
+  }, [accept, connect, role])
 
   useEffect(() => {
     void refresh()
@@ -150,13 +171,13 @@ export function WorldProvider({ children }: { children: React.ReactNode }) {
       cleanup.current?.()
       cleanup.current = null
     }
-    // 최초 1회. refresh 는 입장·퇴장 때 화면이 직접 부른다.
+    // 역할이 바뀌면(다른 화면으로 이동) 다시 잡는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [role])
 
   const dispatch = useCallback(
     async (action: Action) => {
-      const res = await fetch('/api/world', {
+      const res = await fetch(`/api/world?as=${role}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(action),
@@ -173,7 +194,7 @@ export function WorldProvider({ children }: { children: React.ReactNode }) {
       if (message) say(message)
       return message
     },
-    [accept, say],
+    [accept, say, role],
   )
 
   const me = useMemo(() => {
@@ -182,8 +203,8 @@ export function WorldProvider({ children }: { children: React.ReactNode }) {
   }, [world, identity])
 
   const value = useMemo<WorldContextValue>(
-    () => ({ world, identity, needsEntry, loading, transport, dispatch, note, say, me, refresh }),
-    [world, identity, needsEntry, loading, transport, dispatch, note, say, me, refresh],
+    () => ({ world, identity, role, needsEntry, loading, transport, dispatch, note, say, me, refresh }),
+    [world, identity, role, needsEntry, loading, transport, dispatch, note, say, me, refresh],
   )
 
   return <WorldContext.Provider value={value}>{children}</WorldContext.Provider>

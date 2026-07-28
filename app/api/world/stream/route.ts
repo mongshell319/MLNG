@@ -1,4 +1,4 @@
-import { currentIdentity } from '@/lib/server/auth'
+import { currentIdentity, roleFromRequest } from '@/lib/server/auth'
 import { getStore } from '@/lib/server/store'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
  * 어느 쪽이든 "폴링하지 않는다"는 계약은 같다.
  */
 export async function GET(req: Request) {
-  const identity = await currentIdentity()
+  const identity = await currentIdentity(roleFromRequest(req))
   if (!identity) return new Response('입장이 필요해요', { status: 401 })
 
   const store = getStore()

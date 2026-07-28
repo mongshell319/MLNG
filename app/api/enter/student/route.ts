@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { COOKIE_NAME, cookieOptions, newMallangCode, sign } from '@/lib/server/auth'
+import { cookieNameFor, cookieOptions, newMallangCode, sign } from '@/lib/server/auth'
 import { getRegistry, ensureDemoClass } from '@/lib/server/registry'
 import { getStore } from '@/lib/server/store'
 import { LIMITS, available, clientKey, take } from '@/lib/server/ratelimit'
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
     const res = NextResponse.json({ ok: true, code: found.code, name: found.name })
     res.cookies.set(
-      COOKIE_NAME,
+      cookieNameFor('student'),
       sign({ kind: 'student', villageId: ref.villageId, hallId: found.hallId, code: found.code }),
       cookieOptions(),
     )
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
 
   const res = NextResponse.json({ ok: true, code: created.code, name: created.name })
   res.cookies.set(
-    COOKIE_NAME,
+    cookieNameFor('student'),
     sign({ kind: 'student', villageId: ref.villageId, hallId: created.hallId, code: created.code }),
     cookieOptions(),
   )

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { Action } from '@/lib/domain/actions'
 import { authorize } from '@/lib/domain/authz'
-import { currentIdentity } from '@/lib/server/auth'
+import { currentIdentity, roleFromRequest } from '@/lib/server/auth'
 import { getStore } from '@/lib/server/store'
 import { LIMITS, take } from '@/lib/server/ratelimit'
 import { mintRealtimeToken, realtimeTokenTtlSeconds } from '@/lib/server/realtimeToken'
@@ -21,8 +21,8 @@ const HEAVY = new Set<Action['type']>([
   'verify.approveAll',
 ])
 
-export async function GET() {
-  const identity = await currentIdentity()
+export async function GET(req: Request) {
+  const identity = await currentIdentity(roleFromRequest(req))
   if (!identity) return NextResponse.json({ error: '입장이 필요해요' }, { status: 401 })
 
   const snapshot = await getStore().read(identity.villageId)
@@ -48,7 +48,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const identity = await currentIdentity()
+  const identity = await currentIdentity(roleFromRequest(req))
   if (!identity) return NextResponse.json({ error: '입장이 필요해요' }, { status: 401 })
 
   let action: Action

@@ -25,6 +25,16 @@ export const SETTLE_STAGES = [
 
 export type SettleStage = (typeof SETTLE_STAGES)[number]['stage']
 
+export const SETTLE_STAGE_LABEL: Record<SettleStage, string> = {
+  countdown: '카운트다운',
+  total: '반 전체 총량',
+  return: '귀환 보고',
+  spotlight: '스포트라이트',
+  badgesum: '뱃지 집계',
+  growth: '마을 성장',
+  wrap: '마무리',
+}
+
 export const SETTLE_TOTAL_SECONDS = SETTLE_STAGES.reduce((a, s) => a + s.seconds, 0)
 export const FAST_SETTLE_SECONDS = 60
 

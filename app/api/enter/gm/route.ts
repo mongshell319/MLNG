@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { COOKIE_NAME, checkPin, cookieOptions, sign } from '@/lib/server/auth'
+import { checkPin, cookieNameFor, cookieOptions, sign } from '@/lib/server/auth'
 import { ensureDemoClass, getRegistry } from '@/lib/server/registry'
 import { LIMITS, available, clientKey, take } from '@/lib/server/ratelimit'
 
@@ -31,6 +31,10 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ ok: true, villageName: ref.villageName, hallName: ref.hallName })
-  res.cookies.set(COOKIE_NAME, sign({ kind: 'gm', villageId: ref.villageId, hallId: ref.hallId }), cookieOptions())
+  res.cookies.set(
+    cookieNameFor('gm'),
+    sign({ kind: 'gm', villageId: ref.villageId, hallId: ref.hallId }),
+    cookieOptions(),
+  )
   return res
 }

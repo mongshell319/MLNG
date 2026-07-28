@@ -19,7 +19,25 @@ export type Identity =
   | { kind: 'gm'; villageId: string; hallId: string }
   | { kind: 'screen'; villageId: string }
 
-export const COOKIE_NAME = 'mlng_id'
+/**
+ * 역할마다 다른 쿠키를 쓴다.
+ *
+ * 하나로 두면 한 브라우저에서 교사와 학생을 동시에 열 수 없다 — 나중에 들어온 쪽이
+ * 앞의 것을 덮어쓴다. 실제 교실에서는 기기가 달라서 문제가 없지만, 시연·테스트에서는
+ * 한 컴퓨터로 세 화면을 띄워 보는 게 정상이고, 교사가 학생 화면을 미리 보고 싶을 수도 있다.
+ */
+export const COOKIE_NAMES = {
+  student: 'mlng_s',
+  gm: 'mlng_g',
+  screen: 'mlng_t',
+} as const satisfies Record<Identity['kind'], string>
+
+export type Role = Identity['kind']
+
+export function cookieNameFor(kind: Role): string {
+  return COOKIE_NAMES[kind]
+}
+
 const MAX_AGE = 60 * 60 * 24 * 120 // 한 시즌
 
 interface Payload {
@@ -106,10 +124,31 @@ export function verifyScreenToken(token: string | undefined): Identity | null {
   return toIdentity(p)
 }
 
-/** 서버 컴포넌트·라우트 핸들러에서 현재 신원을 읽는다. */
-export async function currentIdentity(): Promise<Identity | null> {
+/**
+ * 현재 신원.
+ *
+ * 어느 역할로 온 요청인지 아는 경우(대부분) 그 쿠키만 본다.
+ * 모르면 gm → student → screen 순으로 찾는다 — 사진 조회처럼 누구나 부르는 경로용이다.
+ */
+export async function currentIdentity<K extends Role>(want: K): Promise<Extract<Identity, { kind: K }> | null>
+export async function currentIdentity(want?: Role | undefined): Promise<Identity | null>
+export async function currentIdentity(want?: Role): Promise<Identity | null> {
   const jar = await cookies()
-  return verify(jar.get(COOKIE_NAME)?.value)
+  if (want) {
+    const found = verify(jar.get(COOKIE_NAMES[want])?.value)
+    return found?.kind === want ? found : null
+  }
+  for (const kind of ['gm', 'student', 'screen'] as const) {
+    const found = verify(jar.get(COOKIE_NAMES[kind])?.value)
+    if (found?.kind === kind) return found
+  }
+  return null
+}
+
+/** 쿼리스트링의 as= 를 역할로 읽는다. 화면이 자기가 누구인지 말해 준다. */
+export function roleFromRequest(req: Request): Role | undefined {
+  const as = new URL(req.url).searchParams.get('as')
+  return as === 'student' || as === 'gm' || as === 'screen' ? as : undefined
 }
 
 export function cookieOptions() {
