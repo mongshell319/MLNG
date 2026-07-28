@@ -1,0 +1,27 @@
+# Render 청사진 — 저장소를 연결하면 이 파일만 보고 서비스가 뜬다.
+#
+# 컨테이너 하나 + 영구 디스크. 외부 서비스가 필요 없다.
+# 인스턴스를 늘리지 말 것 — 세계 상태가 디스크에 있어서 갈라진다.
+# 학년 단위로 커지면 Supabase 어댑터로 옮기면 되고, 코드는 그대로다.
+
+services:
+  - type: web
+    name: mallangschool
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter # 무료 플랜은 디스크를 붙일 수 없다
+    healthCheckPath: /
+    # 세계가 하나여야 한다.
+    numInstances: 1
+    disk:
+      name: mallang-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # 쿠키 서명 키. Render가 만들어 넣고, 우리는 값을 보지 않는다.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: MLNG_SINGLE_INSTANCE
+        value: '1'
+      - key: MLNG_DATA_DIR
+        value: /data

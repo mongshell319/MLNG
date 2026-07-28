@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     return NextResponse.redirect(data.signedUrl)
   }
 
-  const file = path.join(process.cwd(), '.data', 'uploads', key)
+  const file = path.join(process.env.MLNG_DATA_DIR ?? path.join(process.cwd(), '.data'), 'uploads', key)
   try {
     const bytes = await fs.readFile(file)
     const ext = key.split('.').pop() ?? 'jpg'

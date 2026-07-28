@@ -31,7 +31,8 @@ export interface WorldStore {
 // 로컬 어댑터
 // ─────────────────────────────────────────────────────────
 
-const DATA_DIR = path.join(process.cwd(), '.data')
+// 단일 인스턴스 배포에서는 영구 디스크를 여기에 마운트한다.
+const DATA_DIR = process.env.MLNG_DATA_DIR ?? path.join(process.cwd(), '.data')
 
 interface LocalState {
   worlds: Map<string, WorldSnapshot>
@@ -178,13 +179,21 @@ export function getStore(): WorldStore {
   if (store) return store
   const client = serviceClient()
   if (!client) {
-    if (process.env.NODE_ENV === 'production') {
-      // 로컬 어댑터는 인스턴스 하나에서만 성립한다. 서버가 두 대 뜨는 순간
-      // 세계가 조용히 갈라지므로, 프로덕션에서는 시작 자체를 막는다.
+    // 파일 어댑터는 인스턴스 하나에서만 성립한다. 서버가 두 대 뜨는 순간
+    // 세계가 조용히 갈라지므로, 프로덕션에서는 그 사실을 아는 사람만 켤 수 있게 한다.
+    //
+    // 켜도 되는 경우: 컨테이너 한 개 + 영구 디스크로 도는 배포(Render·Fly·Railway·자체 서버).
+    //   한 학교 규모에서는 이쪽이 Supabase보다 단순하고, SSE로 실시간도 그대로 된다.
+    // 켜면 안 되는 경우: Vercel 같은 서버리스. 요청마다 다른 인스턴스가 뜬다.
+    const singleInstance = process.env.MLNG_SINGLE_INSTANCE === '1'
+    if (process.env.NODE_ENV === 'production' && !singleInstance) {
       throw new Error(
-        'Supabase 설정이 필요합니다 (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY). ' +
-          '로컬 어댑터는 개발 전용입니다.',
+        'Supabase 설정이 필요합니다 (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).\n' +
+          '컨테이너 한 개로 운영한다면 MLNG_SINGLE_INSTANCE=1 을 두고 영구 디스크를 MLNG_DATA_DIR 에 마운트하세요.',
       )
+    }
+    if (singleInstance && process.env.NODE_ENV === 'production') {
+      console.log(`[말랑스쿨] 단일 인스턴스 모드 · 세계 상태를 ${DATA_DIR} 에 둡니다. 인스턴스를 늘리지 마세요.`)
     }
     store = localStore
     return store

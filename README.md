@@ -147,6 +147,7 @@ lib/
   server/      store(Supabase | 로컬) · auth · registry · realtimeToken · ratelimit
   client/      world(구독 + dispatch) · photo
 
+Dockerfile · render.yaml   컨테이너 하나로 띄우는 경로
 supabase/migrations/
   0001_world.sql
   0002_classes_and_private_photos.sql
@@ -179,23 +180,45 @@ score = (오늘 전달 − 본인의 최근 평균) + 무대에 못 오른 주 �
 
 ---
 
-## 배포 (Vercel + Supabase)
+## 웹에 올리기
+
+두 갈래가 있다. **한 학교 규모라면 A가 훨씬 단순하다.**
+
+### A. 컨테이너 하나 (외부 서비스 없음)
+
+세계 상태를 마운트한 디스크에 두고 실시간은 SSE로 한다. Supabase도, 데이터베이스도 필요 없다.
+**인스턴스를 늘리면 안 된다** — 세계가 갈라진다. 그래서 `MLNG_SINGLE_INSTANCE=1` 로 명시해야만 켜진다.
+
+**Render** — 저장소를 연결하면 `render.yaml` 하나로 뜬다. `SESSION_SECRET`은 Render가 만들어 넣는다.
+디스크가 필요하므로 유료 플랜(starter)이어야 한다.
+
+**직접 / Fly / Railway**
 
 ```bash
-cp .env.example .env.local        # SESSION_SECRET 은 openssl rand -base64 48
+docker build -t mallangschool .
+docker run -p 3000:3000 \
+  -e SESSION_SECRET="$(openssl rand -base64 48)" \
+  -e MLNG_SINGLE_INSTANCE=1 \
+  -v mallang-data:/data \
+  mallangschool
+```
+
+`/data`에 세계 상태와 제출 사진이 쌓인다. 볼륨을 붙이지 않으면 컨테이너와 함께 사라진다.
+
+첫 접속에서 `/teacher` → **새 마을 세우기**로 마을을 만들면 클래스 코드가 나온다.
+시연용 교실(`MLNG24`)은 프로덕션에서 만들어지지 않으니, 그 코드로는 들어갈 수 없다.
+
+### B. Vercel + Supabase
+
+여러 학교로 커지거나 서버를 직접 두고 싶지 않을 때. 서버리스라 인스턴스가 여럿이므로 A는 쓸 수 없다.
+
+```bash
 psql "$DATABASE_URL" -f supabase/migrations/0001_world.sql
 psql "$DATABASE_URL" -f supabase/migrations/0002_classes_and_private_photos.sql
 ```
 
-환경변수 네 개가 필요하다. `SESSION_SECRET`(32자 이상), `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, 그리고 실시간 구독을 위한
-`SUPABASE_JWT_SECRET`.
-
-**로컬 어댑터는 프로덕션에서 아예 뜨지 않는다.** 파일 + 인메모리라 인스턴스가 둘이 되는 순간
-세계가 조용히 갈라지기 때문에, Supabase 설정이 없으면 `getStore()`가 명시적으로 실패한다.
-조용히 잘못 도는 것보다 시작하지 않는 편이 낫다.
-
-### 데이터 구조
+Vercel 환경변수 다섯 개: `SESSION_SECRET`(32자 이상), `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`.
 
 `worlds` 테이블의 jsonb 한 행이 마을 하나다. 쓰기는 낙관적 잠금(`version`)으로 직렬화되므로
 스물여덟 명이 동시에 전달해도 덮어쓰기가 없고, 충돌하면 최신 상태 위에서 다시 적용한다.
@@ -206,11 +229,9 @@ psql "$DATABASE_URL" -f supabase/migrations/0002_classes_and_private_photos.sql
 스냅샷은 수십 KB다. 학년 단위 통계가 필요해지면 `world_events`에서 읽기 전용 정규화 테이블을
 파생시키면 된다.
 
-### 실시간 구독의 범위
-
-브라우저가 `worlds` 행을 구독하려면 Supabase 쪽에서도 신원이 있어야 한다. anon 키로 열어 두면
-RLS가 걸 것이 없어서 **다른 학교의 세계까지 전부 구독된다**. 그래서 우리 서버가 쿠키를 확인한 뒤
-`village_id` 클레임 하나만 담은 JWT를 발급하고(`lib/server/realtimeToken.ts`), 정책은 그것만 본다.
+**실시간 구독의 범위** — 브라우저가 `worlds` 행을 구독하려면 Supabase 쪽에서도 신원이 있어야 한다.
+anon 키로 열어 두면 RLS가 걸 것이 없어서 **다른 학교의 세계까지 전부 구독된다**. 그래서 우리 서버가
+쿠키를 확인한 뒤 `village_id` 클레임 하나만 담은 JWT를 발급하고, 정책은 그것만 본다.
 
 ```sql
 using (village_id = (auth.jwt() ->> 'village_id'))
@@ -219,11 +240,12 @@ using (village_id = (auth.jwt() ->> 'village_id'))
 토큰에는 마을 말고 아무것도 담지 않는다 — 말랑 코드도 이름도 들어가지 않는다.
 수명은 한 시간이고 클라이언트가 만료 5분 전에 갈아 끼우므로 수업 중에 끊기지 않는다.
 
-### 남은 것
+### 어느 쪽이든
 
-- **레이트 리밋이 인스턴스 단위다**(`lib/server/ratelimit.ts`). 서버리스에서 인스턴스가 여럿이면
-  실제 한도가 그만큼 늘어난다. 이걸 보안 경계로 삼지 않았고(경계는 권한 검사다) 폭주 완충으로만 쓴다.
-  더 엄한 한도가 필요하면 공유 카운터로 바꾸면 된다
+- `SESSION_SECRET` 없이는 프로덕션 빌드가 아예 뜨지 않는다. 쿠키 위조를 막는 유일한 값이다
+- 두 설정이 모두 없으면 `getStore()`가 명시적으로 실패한다. 조용히 잘못 도는 것보다 낫다
+- **레이트 리밋이 인스턴스 단위다**(`lib/server/ratelimit.ts`). 보안 경계로 삼지 않았고(경계는 권한 검사다)
+  폭주 완충으로만 쓴다. 더 엄한 한도가 필요하면 공유 카운터로 바꾸면 된다
 - **에러 로깅·모니터링이 없다**. Sentry 같은 것을 붙일 자리가 아직 비어 있다
 
 ---

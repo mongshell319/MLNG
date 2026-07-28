@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       .upload(key, bytes, { contentType: file.type, upsert: true })
     if (error) return NextResponse.json({ error: '사진을 저장하지 못했어요' }, { status: 502 })
   } else {
-    const dest = path.join(process.cwd(), '.data', 'uploads', key)
+    const dest = path.join(process.env.MLNG_DATA_DIR ?? path.join(process.cwd(), '.data'), 'uploads', key)
     await fs.mkdir(path.dirname(dest), { recursive: true })
     await fs.writeFile(dest, bytes)
   }

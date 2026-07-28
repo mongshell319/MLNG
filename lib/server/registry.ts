@@ -27,7 +27,7 @@ export interface Registry {
   addHall(classCode: string, hallId: string, hallName: string, teacherPinHash: string): Promise<ClassRef | null>
 }
 
-const DATA_DIR = path.join(process.cwd(), '.data')
+const DATA_DIR = process.env.MLNG_DATA_DIR ?? path.join(process.cwd(), '.data')
 const FILE = path.join(DATA_DIR, 'registry.json')
 
 const g = globalThis as unknown as { __mallangRegistry?: Map<string, ClassRef> }
