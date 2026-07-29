@@ -31,7 +31,7 @@ Module._resolveFilename = function (r, ...a) {
 const VillageScene = require('../components/art/VillageScene').default;
 const FieldScene = require('../components/art/FieldScene').default;
 const { seedWorld } = require('../lib/domain/seed');
-const { toArtProps } = require('../lib/art/adapter');
+const { toArtProps, artVillageSlots, artLabelY } = require('../lib/art/adapter');
 const { FIELD_ORDER } = require('../lib/art/tokens');
 
 const OUT = path.join(process.cwd(), 'art-preview');
@@ -81,6 +81,27 @@ console.log('\n계약 점검');
     }
     const p = toArtProps({ ...snap, session: { ...snap.session, siteId: s.id, segmentIndex: 0 } });
     console.log(`  ${s.id} → ${p.site.id}/${p.segment.id}`);
+  }
+
+  // 건물 이름표 자리 — 아트가 실제로 세운 곳과 어댑터가 계산한 곳이 같아야 한다.
+  // VillageScene 에 showLabels 를 켜면 아트가 <text> 를 직접 찍으므로, 그 좌표를 정답으로 삼는다.
+  // 새 아트팩이 배치를 바꾸면 여기서 바로 걸린다.
+  console.log('\n이름표 자리');
+  {
+    const W = 1600, H = 760;
+    const svg = renderToStaticMarkup(React.createElement(VillageScene, { room, width: W, height: H, showLabels: true }));
+    const drawn = [...svg.matchAll(/<text[^>]*x="([\d.]+)"[^>]*y="([\d.]+)"[^>]*>([^<]+)</g)]
+      .map((m) => ({ x: +m[1], y: +m[2], name: m[3] }));
+    const mine = artVillageSlots(room.code, W);
+
+    expect(drawn.length === 5, `아트가 그린 이름표가 5개가 아님: ${drawn.length}개`);
+    expect(drawn.every((d) => Math.abs(d.y - artLabelY(H)) < 0.5), 'artLabelY 가 아트의 이름표 높이와 다름');
+    drawn.forEach((d, i) => {
+      const gap = mine[i] ? Math.abs(mine[i].cx - d.x) : Infinity;
+      expect(gap < 0.5, `${d.name} 이름표 x 가 ${gap.toFixed(1)}px 어긋남 (아트 ${d.x} / 어댑터 ${mine[i] && mine[i].cx})`);
+    });
+    console.log(`  ${drawn.map((d, i) => `${d.name}@${d.x}`).join('  ')}`);
+    console.log(`  높이 ${artLabelY(H)} · 최대 오차 ${Math.max(...drawn.map((d, i) => Math.abs((mine[i] || {}).cx - d.x))).toFixed(2)}px`);
   }
 
   // 팔레트 스왑이 어댑터를 통해서도 도는지

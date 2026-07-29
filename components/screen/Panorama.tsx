@@ -1,12 +1,15 @@
 'use client'
 
+import { VillageScene } from '@/components/art'
 import { Mallang } from '@/components/mallang/Mallang'
 import { Keeper } from '@/components/mallang/Keeper'
 import { KindIcon, WeatherIcon } from '@/components/ui/Icons'
+import { artVillageSlots, BUILDING_BY_ART_FIELD, toArtRoom } from '@/lib/art/adapter'
+import { pickPalette } from '@/lib/art/tokens'
 import { FIELDS, QUEST_KIND, WEATHER_DESC } from '@/lib/domain/master'
 import { formatClock, remainingSeconds } from '@/lib/domain/phase'
 import type { WorldSnapshot } from '@/lib/domain/types'
-import { Amenity, BUILDING_COMPONENT, Monument, WorkBoard } from './Buildings'
+import { WorkBoard } from './Buildings'
 
 /**
  * C1 상태 1 — 상시 (마을 거점).
@@ -17,20 +20,37 @@ import { Amenity, BUILDING_COMPONENT, Monument, WorkBoard } from './Buildings'
  */
 
 /**
- * 무대 배치는 세 층으로 나눈다.
- *   건물층(bottom 320) · 소품층(bottom ~210) · 전경의 말랑이층(bottom 50)
- * 층을 섞으면 말랑이 SVG가 건물 라벨을 덮는다 — 프로토타입에서 반복된 문제다.
+ * 마을 그림은 아트팩의 VillageScene 이 통째로 그린다.
+ *
+ * 아트는 1600×760 으로 구성돼 있다. 무대(1920×1080)는 그보다 세로로 길어서, 아트가 스스로
+ * 정한 대로(preserveAspectRatio="xMidYMax slice") 높이를 채우고 좌우가 조금 잘리게 둔다.
+ * 잘리는 건 가장자리 나무·덤불뿐이고, 대신 지면 높이와 건물 크기가 미리보기와 같아진다.
  */
-const BUILDING_SLOTS: { key: keyof WorldSnapshot['village']['buildings']; left: number; bottom: number; width: number }[] = [
-  { key: 'library', left: 60, bottom: 330, width: 240 },
-  { key: 'workshop', left: 360, bottom: 330, width: 220 },
-  { key: 'plaza', left: 660, bottom: 320, width: 250 },
-  { key: 'garden', left: 1020, bottom: 330, width: 230 },
-  { key: 'lighthouse', left: 1340, bottom: 330, width: 160 },
-]
+const ART_W = 1600
+const ART_H = 760
+const ART_SCALE = 1080 / ART_H // 1.421 — 세로를 채운다
+const ART_LEFT = (1920 - ART_W * ART_SCALE) / 2 // -177 — 좌우로 잘려 나가는 만큼
 
-/** 전경 말랑이 자리 — 길드 게이지(중앙 하단)와 건물 라벨을 둘 다 피한다. */
-const IDLE_SLOTS = [180, 470, 1530]
+/** 아트 좌표 → 무대 좌표 */
+const sx = (x: number) => x * ART_SCALE + ART_LEFT
+const sy = (y: number) => y * ART_SCALE
+
+/** 지면선. 아래로 213px 이 잔디밭이고 여기 위에 이름표·말랑이가 선다. */
+const GROUND = sy(ART_H - 150)
+
+/**
+ * 전경 말랑이 자리.
+ * 건물은 화면 가운데에 모여 서므로(시드 배치) 양 끝이 비어 있다. 이름표와 길드 게이지가
+ * 잔디밭 가운데를 쓰기 때문에 말랑이는 그 바깥으로 내보낸다.
+ */
+const IDLE_SLOTS = [96, 1614]
+
+/**
+ * 건물 이름표 높이.
+ * 아트가 이름표를 두는 자리(artLabelY)는 잔디밭 한가운데라 TV에서는 길드 게이지와 겹친다.
+ * 무대에서는 지면선 바로 아래, 게이지 위쪽 빈 띠에 놓는다.
+ */
+const LABEL_TOP = 16
 
 export function Panorama({
   world,
@@ -49,77 +69,66 @@ export function Panorama({
   const remain = remainingSeconds(session, now)
   const exam = village.examMode
 
+  const room = toArtRoom(village, session, world.progress)
+  const P = pickPalette(room)
+  const slots = artVillageSlots(room.code, ART_W)
+  const labelY = GROUND + LABEL_TOP
+
   return (
     <div
       className="absolute inset-0"
       style={{
-        background: exam
-          ? 'linear-gradient(#EFEAE2 0%, #FFF6EC 48%, #CFE0D4 48%, #C3D9C8 100%)'
-          : 'linear-gradient(#D9F0F7 0%, #FFF6EC 46%, #CFE0D4 46%, #A9C4B2 100%)',
+        background: P.sky,
         filter: dim ? 'brightness(0.55)' : undefined,
         transition: 'filter 900ms ease-out',
       }}
     >
-      {/* 먼 언덕 */}
-      <svg className="absolute bottom-[420px] left-0" width={1920} height={220} viewBox="0 0 1920 220" aria-hidden>
-        <path d="M0 220 Q300 60 620 150 T1240 120 T1920 190 V220 Z" fill="#CFE0D4" opacity={0.85} />
-        <path d="M0 220 Q420 130 900 190 T1920 160 V220 Z" fill="#A9C4B2" opacity={0.7} />
-      </svg>
+      {/* 마을 파노라마 — 하늘·언덕·지면·건물 5동·편의시설·기념비·초목 전부 아트가 그린다 */}
+      <div className={`absolute inset-0 ${growing ? 'anim-growup' : ''}`}>
+        <VillageScene room={room} width={ART_W} height={ART_H} />
+      </div>
 
-      {/* 길 */}
-      <svg className="absolute bottom-0 left-0" width={1920} height={300} viewBox="0 0 1920 300" aria-hidden>
-        <path d="M-40 300 Q560 190 1000 240 T1960 200 V300 Z" fill="#EAD9C2" opacity={0.9} />
-      </svg>
-
-      {/* 건물 5동 */}
-      {BUILDING_SLOTS.map((slot) => {
-        const Component = BUILDING_COMPONENT[slot.key]
-        const field = FIELDS.find((f) => f.building === slot.key)!
+      {/* 건물 이름표 — 아트가 세운 자리를 따라간다 (아트의 26px 이름표는 TV 최소 32px에 못 미친다) */}
+      {slots.map((slot) => {
+        const field = FIELDS.find((f) => f.building === BUILDING_BY_ART_FIELD[slot.field])!
         return (
-          <div key={slot.key} className="absolute" style={{ left: slot.left, bottom: slot.bottom }}>
-            <Component level={village.buildings[slot.key]} width={slot.width} growing={growing} />
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <span
-                className="rounded-full px-4 py-1 font-display"
-                style={{ fontSize: 32, background: '#FFF6EC', border: `2px solid ${field.deep}`, color: field.deep }}
-              >
-                {field.buildingLabel}
-              </span>
-            </div>
-          </div>
+          <span
+            key={slot.field}
+            className="absolute -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-1 font-display"
+            style={{
+              left: sx(slot.cx),
+              top: labelY,
+              fontSize: 32,
+              background: '#FFF6EC',
+              border: `2px solid ${field.deep}`,
+              color: field.deep,
+            }}
+          >
+            {field.buildingLabel}
+          </span>
         )
       })}
 
-      {/* 소품층 — 편의시설 · 기념비 · 작품 게시판 */}
-      <div className="absolute bottom-[212px] left-[900px] flex items-end gap-10">
-        {village.amenities.map((a) => (
-          <Amenity key={a} kind={a} size={72} />
-        ))}
-      </div>
-      {village.monuments.length > 0 && (
-        <div className="absolute bottom-[214px] left-[1250px]">
-          <Monument size={104} label={village.monuments[0]} />
-        </div>
-      )}
-      <div className="absolute bottom-[300px] left-[1580px]">
+      {/* 작품 게시판 — 학생이 올린 사진이라 아트가 그릴 수 없다. 비어 있는 하늘 오른쪽에 건다. */}
+      <div className="absolute right-[28px] top-[152px]">
         <WorkBoard works={session.repairParts} width={250} />
         <div className="mt-2 text-center font-display" style={{ fontSize: 28 }}>
           우리 작품
         </div>
       </div>
 
-      {/* 전경 말랑이층 — 두세 마리가 부유한다 */}
+      {/* 전경 말랑이층 — 잔디밭 양 끝에서 부유한다 */}
       {world.mallangs.slice(0, IDLE_SLOTS.length).map((m, i) => (
         <div
           key={m.id}
           className="anim-floaty absolute"
-          style={{ left: IDLE_SLOTS[i], bottom: 54 + (i % 2) * 22, animationDelay: `${i * 0.8}s` }}
+          style={{ left: IDLE_SLOTS[i], top: GROUND + 12 + (i % 2) * 20, animationDelay: `${i * 0.8}s` }}
         >
           <Mallang color={m.bodyColor} face={i === 1 ? 'glad' : 'base'} size={150} form={m.evolutionForm} accessory={m.wearing} />
         </div>
       ))}
-      <div className="anim-floaty absolute bottom-[54px] left-[1720px]" style={{ animationDelay: '1.6s' }}>
-        <Keeper field="care" size={150} />
+      <div className="anim-floaty absolute" style={{ left: 1780, top: GROUND + 22, animationDelay: '1.6s' }}>
+        <Keeper field="care" size={120} />
       </div>
 
       {/* 상단 좌측 · 날씨 */}

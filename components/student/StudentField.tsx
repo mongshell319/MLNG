@@ -35,7 +35,7 @@ export function StudentField({ world, me, now }: { world: WorldSnapshot; me: Mal
 
   return (
     <div className="relative flex min-h-[100svh] flex-col overflow-hidden">
-      <FieldScene world={world} className="absolute inset-0 h-full w-full" style={{ opacity: settling ? 0.35 : 1 }} />
+      <FieldScene world={world} size="student" className="absolute inset-0 h-full w-full" style={{ opacity: settling ? 0.35 : 1 }} />
 
       {/* 상단 — 구간과 내 이름표 */}
       <div className="relative z-10 flex items-start justify-between px-4 pt-4">

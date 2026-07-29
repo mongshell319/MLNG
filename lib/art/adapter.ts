@@ -10,11 +10,14 @@
  *   room.weather 'clear'|'fog'    village.weather '맑음'|'구름 조금'|'별똥별 소나기'
  *   room.village.ask…keep         village.buildings.library…garden
  *   room.target                   없음 (prog이 0–100이라 target은 100 고정)
- *   room.submissions[].photo      progress[].photoUrl (status 'solved' = 'approved')
+ *   room.submissions[].photo      session.repairParts (스토리지 키 → /api/photo)
  *   site.id 'forest'…'tower'      session.siteId 'site-forest'…'site-light'
  *   segment.id 's1'…'sx'          session.segmentIndex (숫자)
  */
 
+import { BUILDING_WIDTH } from '@/components/art/Buildings'
+import { villageTraits } from '@/lib/art/seed'
+import { photoSrc } from '@/lib/client/photo'
 import type {
   BuildingKey,
   Mallang,
@@ -65,6 +68,11 @@ const FIELD_BY_BUILDING: Record<BuildingKey, ArtFieldKey> = {
   garden: 'keep',
 }
 
+/** 역방향 — 아트가 세운 건물이 우리 어느 건물인지. 이름표·강조에 쓴다. */
+export const BUILDING_BY_ART_FIELD = Object.fromEntries(
+  Object.entries(FIELD_BY_BUILDING).map(([b, a]) => [a, b]),
+) as Record<ArtFieldKey, BuildingKey>
+
 /**
  * 날씨 → 팔레트 입력.
  * pickPalette는 'fog'만 분기하므로(tokens.js) 흐린 날만 안개 팔레트로 보낸다.
@@ -109,12 +117,20 @@ export function toArtSegment(siteId: string, segmentIndex: number): { id: string
 
 /**
  * 복구형 원정이 구조물 파츠로 쓰는 승인 사진.
- * 우리 상태의 'solved'가 아트의 'approved'다. 사진이 없는 건은 칸을 비워 둔다.
+ *
+ * 아트는 'approved' + photo 인 것만 골라 9칸에 붙인다. 우리 쪽 원본은 session.repairParts —
+ * 승인된 사진만 순서대로 들어가는 전용 칸이다. 다만 거기 실리는 건 스토리지 키라서
+ * 그대로 <image href>에 넣으면 안 되고 /api/photo 를 거쳐야 한다(같은 마을인지 확인 후 서명 URL).
+ *
+ * progress 를 넘기면 repairParts 가 비었을 때 승인된 제출 사진으로 채운다.
  */
-export function toArtSubmissions(progress: QuestProgress[]): ArtRoom['submissions'] {
-  return progress
-    .filter((p) => p.status === 'solved' && p.photoUrl)
-    .map((p) => ({ status: 'approved' as const, photo: p.photoUrl as string }))
+export function toArtSubmissions(session: Session, progress: QuestProgress[] = []): ArtRoom['submissions'] {
+  const keys = session.repairParts.filter((k): k is string => !!k)
+  const from = keys.length > 0 ? keys : progress.filter((p) => p.status === 'solved' && p.photoUrl).map((p) => p.photoUrl as string)
+  return from
+    .map((key) => photoSrc(key))
+    .filter((src): src is string => !!src)
+    .map((photo) => ({ status: 'approved' as const, photo }))
 }
 
 export function toArtRoom(village: Village, session: Session, progress: QuestProgress[] = []): ArtRoom {
@@ -133,7 +149,7 @@ export function toArtRoom(village: Village, session: Session, progress: QuestPro
     expType: session.expeditionType,
     prog: session.prog,
     target: PROG_TARGET,
-    submissions: toArtSubmissions(progress),
+    submissions: toArtSubmissions(session, progress),
   }
 }
 
@@ -149,6 +165,41 @@ export function toArtCrowd(mallangs: Mallang[]): ArtCrowdMember[] {
     wearing: m.wearing,
   }))
 }
+
+/**
+ * 마을 건물이 실제로 어디 서는지.
+ *
+ * VillageScene 은 건물 순서·간격을 마을 코드에서 뽑는다(시드 변주). 그래서 바깥에서
+ * 건물 이름표를 얹으려면 같은 자리를 알아야 한다. 좌표를 베껴 적는 대신 아트가 쓰는
+ * 데이터(villageTraits · BUILDING_WIDTH)를 그대로 가져와 배치 식만 맞춘다.
+ *
+ * 아트의 showLabels 를 쓰지 않는 이유는 글자 크기다. 아트의 이름표는 26px 기준이라
+ * TV 로 확대해도 32px 에 못 미친다(§3 추가 "TV 본문 최소 32px").
+ * scripts/check-art-adapter.js 가 이 함수와 아트의 실제 배치가 어긋나면 실패시킨다.
+ */
+export interface ArtVillageSlot {
+  field: ArtFieldKey
+  x: number
+  w: number
+  /** 건물 가운데 — 이름표를 여기에 맞춘다 */
+  cx: number
+}
+
+export function artVillageSlots(code: string, width: number): ArtVillageSlot[] {
+  const t = villageTraits(code) as { order: ArtFieldKey[]; gap: number }
+  const sizes = BUILDING_WIDTH as Record<ArtFieldKey, number>
+  const widths = t.order.map((f) => sizes[f])
+  const total = widths.reduce((a, b) => a + b, 0) + t.gap * 4
+  let cursor = (width - total) / 2
+  return t.order.map((field, i) => {
+    const x = cursor
+    cursor += widths[i] + t.gap
+    return { field, x, w: widths[i], cx: x + widths[i] / 2 }
+  })
+}
+
+/** 아트가 이름표를 놓는 높이. VillageScene 의 gy + 50 과 같은 자리다. */
+export const artLabelY = (height: number) => height - 150 + 50
 
 /** 스냅샷 하나에서 아트가 필요로 하는 것 전부를 뽑는다. */
 export function toArtProps(snap: WorldSnapshot) {

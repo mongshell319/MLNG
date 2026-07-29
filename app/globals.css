@@ -258,6 +258,25 @@
   animation: bounceload 1.1s var(--ease-mallang) infinite;
 }
 
+/* 아트팩이 부르는 이름.
+   components/art/* 는 자립적이라 .f-* 클래스를 직접 붙인다. 키프레임은 이미 위에 있으므로
+   이름만 이어 준다. 아트 파일을 고치는 대신 CSS 한 겹으로 맞추는 쪽이 맞다. */
+.f-float {
+  animation: floaty 4s ease-in-out infinite;
+}
+.f-pop {
+  animation: popin 0.42s var(--ease-mallang) both;
+}
+.f-twinkle {
+  animation: twinkle 2.4s ease-in-out infinite;
+}
+.f-fog {
+  animation: fogmove 8s ease-in-out infinite;
+}
+.f-grow {
+  animation: growup 1.2s var(--ease-mallang) both;
+}
+
 /* 탭 피드백 · 180ms ease-out-back (handoff §모션) */
 .squishy {
   transition: transform 180ms var(--ease-mallang);

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Mallang } from '@/components/mallang/Mallang'
 import { ClassIcon, MapPinIcon } from '@/components/ui/Icons'
 import { CLASS_ABILITY, PLACE_LABEL } from '@/lib/domain/master'
@@ -91,10 +91,15 @@ export function Arrival({
   const site = world.sites.find((s) => s.id === world.session.siteId)
   const seg = site?.segments[world.session.segmentIndex]
 
+  // onDone 은 부모가 매 렌더마다 새로 만든다. 그걸 그대로 의존성에 두면 학생 화면의
+  // 0.5초 시계 틱마다 타이머가 되감겨 2.8초가 영영 차지 않는다 — 도착 연출이 안 걷히고
+  // 필드를 덮은 채로 남는다. 그래서 최신 함수는 ref 로 들고, 타이머는 한 번만 건다.
+  const done = useRef(onDone)
+  done.current = onDone
   useEffect(() => {
-    const id = setTimeout(onDone, 2800)
+    const id = setTimeout(() => done.current(), 2800)
     return () => clearTimeout(id)
-  }, [onDone])
+  }, [])
 
   return (
     <div
