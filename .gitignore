@@ -6,6 +6,10 @@ build/
 # 로컬 어댑터가 세계 상태를 얹어 두는 곳
 .data/
 
+# render-art.js가 뽑는 미리보기. 산출물이지 소스가 아니라서 커밋하지 않는다
+# (ART-README §4-5 "이미지 파일 추가 금지")
+art-preview/
+
 .env
 .env.local
 .env*.local
