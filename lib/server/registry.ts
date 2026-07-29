@@ -139,8 +139,11 @@ export function getRegistry(): Registry {
 }
 
 /**
- * 개발용 시연 교실.
- * Supabase가 붙어 있으면 만들지 않는다 — 실서비스에 고정 PIN을 두지 않기 위해서다.
+ * 시연 교실.
+ *
+ * 고정 PIN이라 아무나 GM이 된다. 그래서 시연 도구가 켜져 있을 때만 존재한다 —
+ * 개발 중에는 늘 켜져 있고, 배포본에서는 MLNG_DEMO_TOOLS=1 을 명시해야 켜진다.
+ * Supabase가 붙어 있으면 만들지 않는다: 실서비스에 고정 PIN을 두지 않기 위해서다.
  */
 export const DEMO = {
   classCode: 'MLNG24',
@@ -150,7 +153,11 @@ export const DEMO = {
 }
 
 export async function ensureDemoClass(): Promise<ClassRef | null> {
-  if (process.env.NODE_ENV === 'production') return null
+  // NODE_ENV 가 아니라 시연 도구 스위치를 본다.
+  // /api/dev 가 "데모 교실 MLNG24 / demo" 라고 안내하는 조건이 이것이라, 여기서 조건이
+  // 갈리면 배포본에서 안내대로 눌렀을 때 "코드나 PIN이 맞지 않아요" 가 나온다.
+  const { devToolsEnabled } = await import('./devtools')
+  if (!devToolsEnabled()) return null
   if (serviceClient()) return null
 
   const { getStore } = await import('./store')

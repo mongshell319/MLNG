@@ -25,3 +25,8 @@ services:
         value: '1'
       - key: MLNG_DATA_DIR
         value: /data
+      # 시연 도구. 켜면 고정 PIN 교실(MLNG24 / demo)이 생기고 /dev 콘솔이 열린다.
+      # 구경만 시킬 배포라면 대시보드에서 1 로 바꾸면 되고,
+      # 교실에 실제로 쓰는 서버라면 0 그대로 둘 것 — 아무나 GM이 된다.
+      - key: MLNG_DEMO_TOOLS
+        value: '0'
